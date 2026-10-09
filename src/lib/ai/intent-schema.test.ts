@@ -93,6 +93,35 @@ describe('parseIntentOutput', () => {
     expect(result.canExecute).toBe(false);
   });
 
+  it('blocks an unsupported metric embedded in a descriptive selection clause', () => {
+    const result = parseIntentOutput('筛选存贷比偏低的银行股', emptyDelta, null);
+    expect(result.unsupportedRequests.some(({ request }) => request.includes('存贷比'))).toBe(true);
+    expect(result.canExecute).toBe(false);
+  });
+
+  it('blocks unsupported metrics mixed with supported selection terms', () => {
+    const result = parseIntentOutput('筛选市值大且存贷比偏低的银行股', emptyDelta, null);
+    expect(result.unsupportedRequests.some(({ request }) => request.includes('存贷比'))).toBe(true);
+    expect(result.canExecute).toBe(false);
+  });
+
+  it.each([
+    '按净利润同比增长率筛选银行股',
+    '按归母净利润同比筛选银行股',
+    '按利润增速筛选银行股',
+    '按净利润增速筛选银行股',
+    '按业绩增长筛选银行股',
+    '按利润增长筛选银行股',
+    '按市值筛选银行股',
+    '按总市值排序银行股',
+    '按大盘筛选银行股',
+    '按盘子大筛选银行股',
+  ])('allows supported metric alias in %s', (query) => {
+    const result = parseIntentOutput(query, emptyDelta, null);
+    expect(result.unsupportedRequests).toEqual([]);
+    expect(result.canExecute).toBe(true);
+  });
+
   it('does not treat ordinary non-metric prose as an unsupported indicator', () => {
     const result = parseIntentOutput('找经营稳健、治理规范的银行股', emptyDelta, null);
     expect(result.unsupportedRequests).toEqual([]);

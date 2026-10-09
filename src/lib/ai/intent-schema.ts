@@ -107,28 +107,48 @@ function detectUnsupportedFinancialMetric(query: string): string | null {
 
   const genericMetric = query.match(/[\u4e00-\u9fff]{2,10}(?:比率|增长率|收益率|周转率|利润率|现金流|每股收益)/)?.[0];
   if (!genericMetric) return null;
-  if (/^(?:归母净利润同比增长率|净利润同比增长率|利润同比增长率)$/.test(genericMetric)) return null;
+  const normalizedMetric = genericMetric.replace(/^(?:按|按照|根据|筛选|排序)+/, '');
+  if (supportedMetricAliases.includes(normalizedMetric)) return null;
+  if (/^(?:归母净利润同比增长率|净利润同比增长率|利润同比增长率)$/.test(normalizedMetric)) return null;
   if (/业绩增长|利润增长|归母净利润.*同比.*增长/.test(query) && /增长率/.test(genericMetric)) return null;
   return genericMetric;
 }
 
-const supportedMetricSubject = (subject: string): boolean => {
-  const normalized = subject
+const supportedMetricAliases = [
+  '归母净利润同比增长率', '净利润同比增长率', '利润同比增长率', '归母净利润同比', '净利润同比',
+  '归母净利润增速', '净利润增速', '利润增速', '业绩增速', '归母净利润', '总市值', '大市值',
+  '盘子大', '大盘', '市值', '银行行业', '所属行业', '行业', '业绩增长', '利润增长',
+].sort((left, right) => right.length - left.length);
+
+function residualMetricText(subject: string): string {
+  let residual = subject
     .replace(/(?:至少|不低于|大于等于|大于|小于|超过|高于|低于|达到|≥|<=|>=|<|>).*$/, '')
     .replace(/[\d.]+\s*(?:万亿|亿元|亿|万元|元|%?)$/g, '')
-    .replace(/(?:按照?|根据|筛选|排序|降序|升序|条件|指标|选股|股票|个股|银行股?|的|里|中)/g, '')
-    .replace(/\s/g, '');
-  if (!normalized) return true;
-  return normalized.split(/[和与及、]/).filter(Boolean).every((term) =>
-    /^(?:行业|所属行业|市值|总市值|盘子大|大盘|业绩增长|利润增长|归母净利润(?:同比|同比增长率)?|净利润同比)$/.test(term));
+    .replace(/(?:按照?|根据|筛选|排序|降序|升序|条件|指标|选股|股票|个股|银行股?|的|里|中)/g, '');
+  for (const alias of supportedMetricAliases) residual = residual.replaceAll(alias, '');
+  return residual
+    .replace(/(?:经营稳健|经营扎实|经营良好|治理规范|治理良好|治理优秀|管理规范|管理优秀)/g, '')
+    .replace(/(?:非常|比较|相对|更加|較为|较为|偏|较|更|很|较高|较低|偏高|偏低|高|低|大|小|好|优秀|稳健|扎实|规范|良好|不错|靠谱|增长|同比|以上|以下|超过|达到|优质|较强|强劲)/g, '')
+    .replace(/[和与及、，,\s]/g, '');
+}
+
+const supportedMetricSubject = (subject: string): boolean => {
+  const residual = residualMetricText(subject);
+  if (!residual) return true;
+  return !/(?:比|率|收益|现金流|净息差|周转|偿债|杠杆|盈利|资产|负债|收入|利润|回款|资本|成本|每股|效率|规模|存贷)/.test(residual);
 };
 
 function detectUnsupportedMetricClauses(query: string): string[] {
   const unsupported = new Set<string>();
-  const selectionClauses = /(?:按|按照)\s*([^，,。；;]+?)\s*(?:进行)?(?:筛选|筛|排序|升序|降序)/g;
-  for (const match of query.matchAll(selectionClauses)) {
-    const subject = match[1]?.trim();
-    if (subject && !supportedMetricSubject(subject)) unsupported.add(subject);
+  const clauses = [
+    /(?:按|按照)\s*([^，,。；;]+?)\s*(?:进行)?(?:筛选|筛|排序|升序|降序)/g,
+    /(?:筛选|筛|找|寻找|选择|选出|选)\s*([^，,。；;]{1,40}?)(?=(?:的)?(?:银行(?:股|业)?|个股|股票)|[，,。；;]|$)/g,
+  ];
+  for (const selectionClauses of clauses) {
+    for (const match of query.matchAll(selectionClauses)) {
+      const subject = match[1]?.trim();
+      if (subject && !supportedMetricSubject(subject)) unsupported.add(subject);
+    }
   }
   const thresholdClauses = /([^，,。；;]{1,20}?)(?:至少|不低于|大于等于|大于|小于|超过|高于|低于|达到|≥|<=|>=|<|>)\s*\d+(?:\.\d+)?\s*(?:万亿|亿元|亿|万元|元|%?)/g;
   for (const match of query.matchAll(thresholdClauses)) {

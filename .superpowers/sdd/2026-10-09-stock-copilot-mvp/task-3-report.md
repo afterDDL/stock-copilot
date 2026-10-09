@@ -50,3 +50,9 @@ The endpoint accepts `{ query, currentStrategy? }` and returns `{ intent: { stra
 - RED: Added regressions for “按存贷比筛选银行股” with an empty model unsupported list, “盘子大，市值至少2000亿元”, and “业绩增长超过10%”. All three failed before the fix.
 - GREEN: Focused Task 3 tests now pass 17/17. A local clause recognizer blocks unsupported subjects in explicit selection/sort or numeric threshold clauses, while the existing ordinary-prose case remains executable. Explicit market-cap and profit-growth numeric thresholds are extracted locally and take precedence over both model deltas and fuzzy defaults.
 - Full suite was last run immediately before this round: 12 files passed, 2 failed (43 passed, 3 failed) in the peer UI tests listed above. This round reran the focused Task 3 tests only.
+
+## Follow-up review fixes, round 3
+
+- RED: Added the exact “筛选存贷比偏低的银行股” case, a mixed supported/unsupported “市值大且存贷比偏低” case, and allowlist regressions for net-profit growth, profit-growth, and market-cap aliases. The descriptive-selection and several alias cases failed before the fix.
+- GREEN: The focused Task 3 run passes 29/29 tests. Clause recognition now inspects descriptive text after selection verbs as well as `按…筛选/排序` and numeric thresholds, strips known supported phrases and harmless descriptive words, and blocks residual metric-like constraints. It permits `净利润同比增长率`, `归母净利润同比`, `利润增速`, `净利润增速`, `业绩增长`, `利润增长`, and the supported market-cap aliases. Ordinary descriptive prose continues to pass.
+- No full-suite run in this round; the most recent full-suite status remains 43 passed, 3 peer UI failures (see prior round).
