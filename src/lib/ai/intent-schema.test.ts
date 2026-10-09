@@ -33,6 +33,20 @@ describe('parseIntentOutput', () => {
     expect(result.strategy.sort.direction).toBe('desc');
   });
 
+  it('does not let valid model updates override fuzzy defaults', () => {
+    const result = parseIntentOutput('找盘子大且业绩增长的银行股', {
+      ...emptyDelta,
+      condition_changes: [
+        { field: 'market_cap_cny', operator: 'gte', value: 200000000000, unit: '元', action: 'upsert', source_expression: '大市值', ai_inferred: false, editable: false },
+        { field: 'net_profit_parent_yoy_pct', operator: 'gt', value: 5, unit: '%', action: 'upsert', source_expression: '高增长', ai_inferred: false, editable: false },
+      ],
+    }, null);
+    expect(result.strategy.conditions.find((item) => item.field === 'market_cap_cny')).toMatchObject({
+      operator: 'gte', value: 100000000000, aiInferred: true, editable: true,
+    });
+    expect(result.strategy.conditions.find((item) => item.field === 'net_profit_parent_yoy_pct')).toMatchObject({ operator: 'gt', value: 0 });
+  });
+
   it('keeps unrelated current strategy conditions during a partial edit', () => {
     const result = parseIntentOutput('把市值门槛提高到2000亿元', {
       ...emptyDelta,
@@ -54,8 +68,24 @@ describe('parseIntentOutput', () => {
   });
 
   it('rejects unsupported metrics and blocks execution', () => {
-    const result = parseIntentOutput('按股息率筛选银行股', emptyDelta, null);
-    expect(result.unsupportedRequests[0]?.request).toBe('股息率');
+    const result = parseIntentOutput('按经营现金流筛选银行股', emptyDelta, null);
+    expect(result.unsupportedRequests.some(({ request }) => request.includes('经营现金流'))).toBe(true);
+    expect(result.canExecute).toBe(false);
+  });
+
+  it('does not treat ordinary non-metric prose as an unsupported indicator', () => {
+    const result = parseIntentOutput('找经营稳健、治理规范的银行股', emptyDelta, null);
+    expect(result.unsupportedRequests).toEqual([]);
+    expect(result.canExecute).toBe(true);
+  });
+
+  it('rejects a non-bank industry update and keeps the bank scope', () => {
+    const result = parseIntentOutput('筛选互联网行业股票', {
+      ...emptyDelta,
+      condition_changes: [{ field: 'industry', operator: 'eq', value: '互联网', unit: '行业', action: 'upsert', source_expression: '互联网行业', ai_inferred: false, editable: true }],
+    }, null);
+    expect(result.strategy.conditions.filter((item) => item.field === 'industry').map((item) => item.value)).toEqual(['银行']);
+    expect(result.unsupportedRequests.some(({ request }) => request.includes('互联网'))).toBe(true);
     expect(result.canExecute).toBe(false);
   });
 

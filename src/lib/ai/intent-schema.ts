@@ -92,12 +92,37 @@ function parseModelOutput(output: unknown) {
   return { success: true as const, data: parsed.data };
 }
 
+function detectUnsupportedFinancialMetric(query: string): string | null {
+  const patterns = [
+    /经营现金流|现金流量(?:表)?|自由现金流|现金流/i,
+    /营业收入|主营业务收入|营收|销售收入/i,
+    /净资产收益率|总资产收益率|资产负债率|负债率|资本充足率|不良贷款率|拨备覆盖率|净息差/i,
+    /市盈率|市净率|股息率|股息|股利|分红/i,
+    /每股(?:收益|净资产|现金流)|(?:ROE|ROA|ROIC|EPS|PE|PB)\b/i,
+    /[\u4e00-\u9fff]{2,10}(?:周转率|收益率|利润率|费用率|现金比率|流动比率|速动比率|偿债能力)/,
+    /财务指标|财务比率|盈利能力指标/,
+  ];
+  const match = patterns.map((pattern) => query.match(pattern)?.[0]).find(Boolean);
+  if (match) return match;
+
+  const genericMetric = query.match(/[\u4e00-\u9fff]{2,10}(?:比率|增长率|收益率|周转率|利润率|现金流|每股收益)/)?.[0];
+  if (!genericMetric) return null;
+  if (/^(?:归母净利润同比增长率|净利润同比增长率|利润同比增长率)$/.test(genericMetric)) return null;
+  if (/业绩增长|利润增长|归母净利润.*同比.*增长/.test(query) && /增长率/.test(genericMetric)) return null;
+  return genericMetric;
+}
+
 export function parseIntentOutput(query: string, output: unknown, currentStrategy: Strategy | null): IntentResponse {
   const parsed = parseModelOutput(output);
   if (!parsed.success) throw new IntentOutputError('schema_invalid', 'DeepSeek intent did not match the required schema.');
   const delta = parsed.data;
   const conditions = defaultConditions(query, currentStrategy);
+  const unsupportedRequests = [...delta.unsupported_requests];
   for (const change of delta.condition_changes) {
+    if (change.field === 'industry' && change.action === 'upsert' && change.value !== '银行') {
+      unsupportedRequests.push({ request: String(change.value), reason: '当前基础股票池限定为银行股，不能更改为其他行业。' });
+      continue;
+    }
     const index = conditions.findIndex((condition) => condition.field === change.field);
     if (change.action === 'remove') {
       if (change.field === 'industry') continue;
@@ -118,6 +143,18 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
     if (index >= 0) conditions[index] = condition;
     else conditions.push(condition);
   }
+  if (/盘子大|大盘/.test(query)) {
+    const index = conditions.findIndex((condition) => condition.field === 'market_cap_cny');
+    const fuzzyCap = freshCondition('market_cap_cny', 100000000000, 'gte', '盘子大（默认按总市值≥1000亿元）', true);
+    if (index >= 0) conditions[index] = { ...fuzzyCap, statisticDate: conditions[index].statisticDate };
+    else conditions.push(fuzzyCap);
+  }
+  if (/业绩增长|利润增长/.test(query)) {
+    const index = conditions.findIndex((condition) => condition.field === 'net_profit_parent_yoy_pct');
+    const profitGrowth = freshCondition('net_profit_parent_yoy_pct', 0, 'gt', '业绩增长（归母净利润同比>0%）', false);
+    if (index >= 0) conditions[index] = { ...profitGrowth, statisticDate: conditions[index].statisticDate };
+    else conditions.push(profitGrowth);
+  }
   if (!conditions.some((condition) => condition.field === 'industry' && condition.value === '银行')) {
     conditions.unshift(freshCondition('industry', '银行', 'eq', '银行股基础范围', false));
   }
@@ -130,8 +167,7 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
     conditions,
     sort: { field: 'net_profit_parent_yoy_pct', direction: hasProfitCondition ? 'desc' : (delta.sort_direction ?? 'desc') },
   });
-  const unsupportedRequests = [...delta.unsupported_requests];
-  const unsupportedMetric = query.match(/股息率|股息|净资产收益率|ROE|市盈率|市净率|PE|PB|ROA|每股收益|EPS/i)?.[0];
+  const unsupportedMetric = detectUnsupportedFinancialMetric(query);
   if (unsupportedMetric && !unsupportedRequests.some(({ request }) => request.toLowerCase() === unsupportedMetric.toLowerCase())) {
     unsupportedRequests.push({ request: unsupportedMetric, reason: '当前仅支持所属行业、总市值和归母净利润同比增长率。' });
   }

@@ -38,3 +38,9 @@ The endpoint accepts `{ query, currentStrategy? }` and returns `{ intent: { stra
 - Unknown or commonly unsupported indicators and return/price forecasts fail closed and set `canExecute: false`; profit growth always sorts descending.
 - Default statistic dates (`2026-10-09` market cap and `2026-06-30` profit) follow the Phase 0 evidence. They may need to become request-date/config driven once date selection is introduced.
 - The full repository suite and typecheck remain blocked by concurrently added UI/storage tests whose implementation is not present in this worktree snapshot; these failures are outside Task 3 files.
+
+## Follow-up review fixes
+
+- RED: Added adversarial cases proving that valid model updates could override the fuzzy market-cap/profit-growth meanings, an omitted `unsupported_requests` let “经营现金流” through, and an `industry=互联网` update produced both internet and bank conditions. All three tests failed before the fixes.
+- GREEN: The focused Task 3 run now passes 14/14 tests. The parser reapplies the fixed fuzzy meanings after model deltas, detects common and suffix-shaped Chinese financial metric terms without flagging ordinary prose such as “经营稳健、治理规范”, and rejects non-bank industry updates into `unsupportedRequests` so execution is blocked.
+- Latest full suite: 12 test files passed, 2 failed; 43 tests passed, 3 failed. Failures are in peer UI work: two `CopilotWorkspace` tests fail due to duplicate “浦发银行” buttons, and `useCopilot` still reports `canRun=false` after clarification is answered. Task 3 focused tests passed in the same run.
