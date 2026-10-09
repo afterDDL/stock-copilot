@@ -7,6 +7,7 @@ import { detectConflicts } from '../lib/engine/conflicts';
 import { diffResults } from '../lib/engine/diff';
 import { screenUniverse } from '../lib/engine/screen';
 import { createStrategyStorage } from '../lib/storage/strategies';
+import type { ConditionMapping } from '../lib/mapping/resolver';
 import type { StrategyStorage } from '../lib/storage/strategies';
 
 export type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; kind?: 'normal' | 'error' };
@@ -19,17 +20,18 @@ export type SnapshotEnvelope = {
 export type IntentEnvelope = {
   strategy: Strategy; assumptions: string[]; clarifications: string[];
   unsupportedRequests: Array<{ request: string; reason: string }>; canExecute: boolean;
+  mappings?: ConditionMapping[];
 };
 type Options = {
-  intentRequest?: (query: string, currentStrategy?: Strategy) => Promise<IntentEnvelope | { intent: IntentEnvelope }>;
+  intentRequest?: (query: string, currentStrategy?: Strategy, previousStrategy?: Strategy) => Promise<IntentEnvelope | { intent: IntentEnvelope }>;
   snapshotRequest?: () => Promise<SnapshotEnvelope>;
   storage?: Pick<StrategyStorage, 'list' | 'save' | 'load' | 'delete'> & Partial<Pick<StrategyStorage, 'warning'>>;
 };
 type Tab = 'included' | 'excluded' | 'unknown';
 type IntentContext = { originalQuery: string; answers: Array<{ prompt: string; answer: string }> };
 
-async function requestIntent(query: string, currentStrategy?: Strategy): Promise<IntentEnvelope> {
-  const response = await fetch('/api/intent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query, ...(currentStrategy ? { currentStrategy } : {}) }) });
+async function requestIntent(query: string, currentStrategy?: Strategy, previousStrategy?: Strategy): Promise<IntentEnvelope> {
+  const response = await fetch('/api/intent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query, ...(currentStrategy ? { currentStrategy } : {}), ...(previousStrategy ? { previousStrategy } : {}) }) });
   const body = await response.json();
   if (!response.ok) throw new Error(body?.error?.message ?? '意图解析失败，请重试。');
   return body.intent as IntentEnvelope;
@@ -64,6 +66,8 @@ export function useCopilot(options: Options = {}) {
   const [pendingIntentContext, setPendingIntentContext] = useState<IntentContext | null>(null);
   const [canExecute, setCanExecute] = useState(true);
   const [unsupportedItems, setUnsupportedItems] = useState<IntentEnvelope['unsupportedRequests']>([]);
+  const [mappings, setMappings] = useState<ConditionMapping[]>([]);
+  const [previousVersionStrategy, setPreviousVersionStrategy] = useState<Strategy | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('included');
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [compareCodes, setCompareCodes] = useState<[string | null, string | null]>([null, null]);
@@ -77,11 +81,13 @@ export function useCopilot(options: Options = {}) {
   const setMessage = useCallback((text: string, role: ChatMessage['role'], kind: ChatMessage['kind'] = 'normal') => {
     setMessages((current) => [...current, { id: `${Date.now()}-${current.length}`, role, text, kind }]);
   }, []);
-  const applyIntentResponse = useCallback((response: IntentEnvelope, context: IntentContext) => {
+  const applyIntentResponse = useCallback((response: IntentEnvelope, context: IntentContext, priorStrategy?: Strategy) => {
     const safeStrategy = strategySchema.parse(response.strategy);
     setStrategy(copyStrategy(safeStrategy));
     setCanExecute(response.canExecute);
     setUnsupportedItems(response.unsupportedRequests ?? []);
+    setMappings(response.mappings ?? []);
+    setPreviousVersionStrategy(priorStrategy ? copyStrategy(priorStrategy) : previousVersionStrategy);
     const prompts = response.clarifications.map((prompt, index) => ({ id: `clarification-${index + 1}`, prompt, answer: '' }));
     setClarification(prompts.length ? { prompts } : null);
     setPendingIntentContext(prompts.length ? context : null);
@@ -95,7 +101,7 @@ export function useCopilot(options: Options = {}) {
       setPhase('strategy_ready');
     }
     setSnapshot(null); setSnapshotEnvelope(null); setResult(null); setBaselineResult(null); setSelectedCode(null); setCompareCodes([null, null]); setBaselineStrategy(null);
-  }, [setMessage]);
+  }, [previousVersionStrategy, setMessage]);
   const submitIntent = useCallback(async () => {
     const query = draft.trim();
     if (!query || busy) return;
@@ -104,12 +110,15 @@ export function useCopilot(options: Options = {}) {
     setDraft('');
     setClarification(null); setPendingIntentContext(null);
     try {
-      const response = normalizeIntent(await (options.intentRequest ?? requestIntent)(query, strategy ?? undefined));
-      applyIntentResponse(response, { originalQuery: query, answers: [] });
+      const request = options.intentRequest ?? requestIntent;
+      const response = normalizeIntent(await (previousVersionStrategy
+        ? request(query, strategy ?? undefined, previousVersionStrategy)
+        : request(query, strategy ?? undefined)));
+      applyIntentResponse(response, { originalQuery: query, answers: [] }, strategy ?? undefined);
     } catch (cause) {
       const message = errorText(cause); setError(message); setMessage(message, 'assistant', 'error'); setPhase('recoverable_error'); setDraft(query);
     } finally { setBusy(false); }
-  }, [applyIntentResponse, busy, draft, options.intentRequest, setMessage, strategy]);
+  }, [applyIntentResponse, busy, draft, options.intentRequest, previousVersionStrategy, setMessage, strategy]);
   const answerClarification = useCallback((promptIndex: number, answer: string) => {
     setClarification((current) => current ? { prompts: current.prompts.map((item, index) => index === promptIndex ? { ...item, answer } : item) } : current);
   }, []);
@@ -120,12 +129,15 @@ export function useCopilot(options: Options = {}) {
     setBusy(true); setError(null); setPhase('intent_pending');
     setMessage(`补充说明：\n${clarification.prompts.map(({ prompt, answer }) => `- ${prompt}：${answer.trim()}`).join('\n')}`, 'user');
     try {
-      const response = normalizeIntent(await (options.intentRequest ?? requestIntent)(query, strategy ?? undefined));
-      applyIntentResponse(response, { originalQuery: pendingIntentContext.originalQuery, answers });
+      const request = options.intentRequest ?? requestIntent;
+      const response = normalizeIntent(await (previousVersionStrategy
+        ? request(query, strategy ?? undefined, previousVersionStrategy)
+        : request(query, strategy ?? undefined)));
+      applyIntentResponse(response, { originalQuery: pendingIntentContext.originalQuery, answers }, strategy ?? undefined);
     } catch (cause) {
       const message = errorText(cause); setError(message); setMessage(message, 'assistant', 'error'); setPhase('recoverable_error');
     } finally { setBusy(false); }
-  }, [applyIntentResponse, busy, clarification, options.intentRequest, pendingIntentContext, setMessage, strategy]);
+  }, [applyIntentResponse, busy, clarification, options.intentRequest, pendingIntentContext, previousVersionStrategy, setMessage, strategy]);
   const updateStrategy = useCallback((update: (current: Strategy) => Strategy) => {
     setStrategy((current) => current ? copyStrategy(update(current), current.version + 1) : current);
     setPhase('strategy_dirty');
@@ -204,7 +216,7 @@ export function useCopilot(options: Options = {}) {
   const removeCondition = useCallback((index: number) => updateStrategy((current) => ({ ...current, conditions: current.conditions.filter((_condition, i) => i !== index) })), [updateStrategy]);
 
   return {
-    phase, messages, draft, strategy, snapshot, snapshotEnvelope, result, baselineResult, previousStrategy: baselineStrategy, previousResult: baselineResult,
+    phase, messages, draft, strategy, snapshot, snapshotEnvelope, result, baselineResult, previousStrategy: baselineStrategy, previousResult: baselineResult, mappings,
     conflicts, clarification, unsupportedItems, activeTab, selectedCode, compareCodes, diff, busy, error,
     actions: {
       setDraft, submitIntent, answerClarification, submitClarification, updateStrategy, updateCondition, updateConditionByField,

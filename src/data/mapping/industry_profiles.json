@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "profiles": [
+    {"industry":"bank","label":"银行","status":"p0_verified_scope","verified":true,"universe":"当前数据快照内的42只A股银行股；不声明全市场绝对完整","metrics":{"company_size":{"preferredMetric":"market_cap_cny","status":"verified","default":{"operator":"gte","value":100000000000,"unit":"元","source":"产品预设","editable":true}},"profit_growth":{"preferredMetric":"net_profit_parent_yoy_pct","status":"verified","reportingPeriod":"2026-06-30"},"profitability":{"preferredMetric":"roe_pct","status":"candidate_only"},"valuation":{"preferredMetrics":["pb_ratio","pe_ratio","valuation_percentile"],"status":"candidate_only"},"price_stability":{"preferredMetrics":["volatility_pct","max_drawdown_pct"],"status":"candidate_only"},"financial_stability":{"preferredMetrics":["capital_adequacy_pct","nonperforming_loan_ratio_pct"],"status":"candidate_only"},"business_improvement":{"preferredMetric":"multi_period_profit_growth","status":"candidate_only"},"dividend":{"preferredMetrics":["dividend_yield_pct","dividend_continuity"],"status":"candidate_only"},"liquidity":{"preferredMetrics":["turnover_rate_pct","average_trading_value_cny"],"status":"candidate_only"},"market_momentum":{"preferredMetrics":["period_return_pct","relative_strength_pct"],"status":"candidate_only"}},"notes":"1000亿元为可编辑产品预设，不是行业通用标准；需基于当前实际快照解释分布。"},
+    {"industry":"non_bank_example","label":"其他行业（示例结构）","status":"not_enabled","verified":false,"universe":null,"metrics":{},"notes":"仅示例结构，不可用于生成或执行条件。"}
+  ]
+}

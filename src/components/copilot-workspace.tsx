@@ -5,6 +5,7 @@ import type { Condition, Strategy } from '../lib/domain/types';
 import { useCopilot } from '../hooks/use-copilot';
 import type { StrategyStorage } from '../lib/storage/strategies';
 import type { IntentEnvelope, SnapshotEnvelope } from '../hooks/use-copilot';
+import type { ConditionMapping } from '../lib/mapping/resolver';
 import { ChatPanel } from './chat-panel';
 import { StrategyEditor } from './strategy-editor';
 import { ConflictPanel } from './conflict-panel';
@@ -17,6 +18,25 @@ type Props = {
   storage?: Pick<StrategyStorage, 'list' | 'save' | 'load' | 'delete'> & Partial<Pick<StrategyStorage, 'warning'>>;
 };
 const sections = [{ id: 'conversation', label: '对话' }, { id: 'strategy', label: '策略' }, { id: 'research', label: '结果' }];
+const mappingStateLabel: Record<ConditionMapping['state'], string> = {
+  confirmed: '已确认', assumed: '产品预设', needs_clarification: '需要澄清', unsupported: '暂不支持',
+};
+const mappingFieldLabel: Record<string, string> = {
+  industry: '所属行业', market_cap_cny: '总市值', net_profit_parent_yoy_pct: '归母净利润同比增长率',
+};
+
+function MappingPanel({ mappings }: { mappings: ConditionMapping[] }) {
+  if (!mappings.length) return null;
+  return <section className="card mapping-card" aria-label="意图映射">
+    <div className="section-heading"><div><p className="eyebrow">原话 · 金融概念 · 可执行字段</p><h2>意图映射</h2></div></div>
+    <div className="mapping-list">{mappings.map((mapping, index) => <article className="mapping-item" key={mapping.originalExpression + mapping.concept + index}>
+      <div className="mapping-item-heading"><strong>“{mapping.originalExpression}”</strong><span className={'mapping-state mapping-' + mapping.state}>{mappingStateLabel[mapping.state]}</span></div>
+      <p>{mapping.concept + (mapping.field ? ' → ' + (mappingFieldLabel[mapping.field] ?? mapping.field) : '') + (mapping.unit ? ' · ' + mapping.unit : '') + (mapping.statisticDate ? ' · ' + mapping.statisticDate : '')}</p>
+      <span>{mapping.explanation}</span>
+      {mapping.defaultSource && <small>默认来源：{mapping.defaultSource}</small>}
+    </article>)}</div>
+  </section>;
+}
 
 export function CopilotWorkspace({ intentRequest, snapshotRequest, storage }: Props) {
   const state = useCopilot({ intentRequest, snapshotRequest, storage });
@@ -71,13 +91,14 @@ export function CopilotWorkspace({ intentRequest, snapshotRequest, storage }: Pr
         <div className="conversation-column">
           <div id="conversation"><ChatPanel messages={state.messages} draft={state.draft} busy={state.busy} busyText={state.phase === 'data_loading' ? '正在获取数据快照…' : '正在整理你的筛选条件…'} error={state.error} clarification={state.clarification} onDraftChange={state.actions.setDraft} onSubmit={() => { void state.actions.submitIntent(); }} onClarificationAnswer={state.actions.answerClarification} onSubmitClarification={() => { void state.actions.submitClarification(); }} /></div>
           <div id="strategy"><StrategyEditor strategy={state.strategy} disabled={state.busy} onRename={rename} onConditionChange={conditionChange} onConditionRemove={state.actions.removeCondition} onConditionAdd={state.actions.addCondition} onSortDirectionChange={sortDirection} onRun={() => { void state.actions.runScreen(); }} canRun={state.actions.canRun} /></div>
+          <MappingPanel mappings={state.mappings} />
           <ConflictPanel conflicts={state.conflicts} strategy={state.strategy} onFix={(conflict, fix) => { state.actions.fixConflict(conflict, fix); requestAnimationFrame(() => {
             const label = conflict.field === 'market_cap_cny' ? '总市值门槛（元）' : conflict.field === 'net_profit_parent_yoy_pct' ? '归母净利润同比增长率门槛（%）' : '所属行业';
             document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)?.focus();
           }); }} />
           {state.unsupportedItems.length > 0 && <section className="card unsupported-card" aria-labelledby="unsupported-heading"><h2 id="unsupported-heading">暂不支持的要求</h2>{state.unsupportedItems.map((item, index) => <p key={`${item.request}-${index}`}><strong>{item.request}</strong>：{item.reason}</p>)}</section>}
         </div>
-        <div id="research" className="research-column"><ResultsWorkspace result={state.result} snapshot={state.snapshot} snapshotEnvelope={state.snapshotEnvelope} activeTab={state.activeTab} selectedCode={state.selectedCode} comparingCodes={state.compareCodes} diff={state.diff} previousStrategy={state.previousStrategy} currentStrategy={state.strategy} onTabChange={state.actions.setActiveTab} onSelectStock={handleSelectStock} onCompareSlotChange={handleCompare} onRebase={state.actions.rebaseDiff} /></div>
+        <div id="research" className="research-column"><ResultsWorkspace result={state.result} previousResult={state.previousResult} snapshot={state.snapshot} snapshotEnvelope={state.snapshotEnvelope} activeTab={state.activeTab} selectedCode={state.selectedCode} comparingCodes={state.compareCodes} diff={state.diff} previousStrategy={state.previousStrategy} currentStrategy={state.strategy} onTabChange={state.actions.setActiveTab} onSelectStock={handleSelectStock} onCompareSlotChange={handleCompare} onRebase={state.actions.rebaseDiff} /></div>
       </div>
       <div className="live-announcer" aria-live="polite" aria-atomic="true">{state.busy && state.phase === 'data_loading' ? '正在使用当前数据快照筛选银行股。' : state.result ? `筛选完成，入选 ${state.result.included.length} 只，排除 ${state.result.excluded.length} 只，无法判定 ${state.result.unknown.length} 只。` : ''}</div>
     </main>

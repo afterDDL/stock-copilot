@@ -33,7 +33,7 @@ export interface Strategy {
   industry: 'bank';
   conditions: Condition[];
   sort: {
-    field: 'net_profit_parent_yoy_pct';
+    field: 'market_cap_cny' | 'net_profit_parent_yoy_pct';
     direction: 'asc' | 'desc';
   };
 }

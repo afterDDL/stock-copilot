@@ -105,7 +105,7 @@ const threshold = (unit: string) => `(?:${numericComparator}|提高到|降低到
 const marketCapLanguage = new RegExp(`(?:总市值|大市值|市值|盘子大|盘子|大盘)(?:门槛|阈值|条件)?(?:\\s*(?:${threshold('万亿元|万亿|亿元|亿|万元|元')}|(?:比较|相对|较为|非常|偏|较|更|很)?(?:大|小)))?`, 'g');
 const profitGrowthLanguage = new RegExp(`(?:${profitGrowthAliases.join('|')})(?:门槛|阈值|条件)?(?:\\s*(?:${threshold('%|％|百分比')}|越高越好|从高到低(?:排序|排列)?|降序(?:排序|排列)?|排序|排列|优先|(?:比较|相对|较为|非常|偏|较|更|很)?(?:高|低)|为正|正增长))?`, 'g');
 const bankLanguage = /(?:银行行业|银行业|银行股|银行|所属行业|行业)/g;
-const requestScaffolding = /(?:请帮我|帮我|请|我想要|我想|我要|寻找|找|按照|根据|按|进行|筛选|选出|选择|选股|选|把|将|门槛|阈值|条件|指标|取消|删除|移除|保留|股票|个股|并且|而且|以及|并|且|和|与|及|的|中|里)/g;
+const requestScaffolding = /(?:请帮我|帮我|请|我想要|我想|我要|寻找|找|按照|根据|按|进行|筛选|选出|选择|选股|选|些|还在|仍在|依然|把|将|门槛|阈值|条件|指标|取消|删除|移除|保留|股票|个股|并且|而且|以及|并|且|和|与|及|的|中|里)/g;
 
 function detectUncoveredCriteria(query: string): string[] {
   // Spaces preserve boundaries, so separated fragments cannot accidentally
@@ -113,6 +113,8 @@ function detectUncoveredCriteria(query: string): string[] {
   const residual = query.normalize('NFKC')
     .replace(marketCapLanguage, ' ')
     .replace(profitGrowthLanguage, ' ')
+    .replace(/(?:归母净利润|净利润|业绩|利润)还在增长|(?:归母净利润|净利润|利润)仍在增长|利润增长越快越好/g, ' ')
+    .replace(/越快越好/g, ' ')
     .replace(bankLanguage, ' ')
     .replace(requestScaffolding, ' ');
   return [...new Set(residual.split(/[\s\p{P}]+/u).filter(Boolean))];

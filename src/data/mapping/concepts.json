@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "concepts": [
+    {"id":"company_size","intent":"公司规模","meaning":"公司或股票的相对规模；银行 P0 仅以总市值作产品代理","examples":["盘子大一点","不要小盘股","市值超过两千亿元"],"ambiguities":[],"bankMetrics":["market_cap_cny"],"clarifyWhen":["规模方向明确但没有显式阈值且不是产品预设短语"],"notes":"1000亿元仅是银行场景产品预设，不是行业标准。"},
+    {"id":"profit_growth","intent":"盈利增长","meaning":"归母净利润同比变化；必须区分筛选门槛与排序偏好","examples":["业绩还在增长","利润增长快的优先"],"ambiguities":["增长为正是条件；增长越快是排序偏好"],"bankMetrics":["net_profit_parent_yoy_pct"],"clarifyWhen":[],"notes":"单期同比不能证明持续改善或盈利质量。"},
+    {"id":"profitability","intent":"盈利能力","meaning":"资本或资产使用效率","examples":["盈利能力好","赚钱能力强"],"ambiguities":[],"bankMetrics":["roe_pct","roa_pct"],"clarifyWhen":["缺少已验证执行指标"],"notes":"不能以利润增速替代盈利能力。"},
+    {"id":"valuation","intent":"估值水平","meaning":"价格相对企业基本面或历史估值的高低","examples":["便宜的银行股","低估值"],"ambiguities":["PB、PE、历史分位可能有不同含义"],"bankMetrics":["pb_ratio","pe_ratio","valuation_percentile"],"clarifyWhen":["用户未指定估值口径"],"notes":"股价绝对低不等于估值便宜。"},
+    {"id":"price_stability","intent":"股价稳定性","meaning":"价格路径的波动与回撤特征","examples":["股价稳一点","走势稳定"],"ambiguities":["稳定可能指价格波动或经营表现"],"bankMetrics":["volatility_pct","max_drawdown_pct"],"clarifyWhen":["稳定含义或观察区间不明确"],"notes":"不能用市值代表价格稳定。"},
+    {"id":"financial_stability","intent":"财务稳健","meaning":"资产质量、资本充足与负债风险等财务韧性","examples":["财务稳健","别是垃圾股"],"ambiguities":["需要明确风险指标和阈值"],"bankMetrics":["capital_adequacy_pct","nonperforming_loan_ratio_pct"],"clarifyWhen":["缺少明确风险指标"],"notes":"不能以单期利润增长或市值代替。"},
+    {"id":"business_improvement","intent":"经营改善","meaning":"多个期间内经营指标变化趋势","examples":["经营持续改善","基本面越来越好"],"ambiguities":["需指定指标与比较期间"],"bankMetrics":["multi_period_profit_growth"],"clarifyWhen":["单期同比不能确认持续改善"],"notes":"不能等同最近一期利润同比为正。"},
+    {"id":"dividend","intent":"分红表现","meaning":"现金分红收益及稳定性","examples":["高分红","分红稳定"],"ambiguities":["股息率与连续分红历史是不同口径"],"bankMetrics":["dividend_yield_pct","dividend_continuity"],"clarifyWhen":["分红口径未指定"],"notes":"当前数据未验证。"},
+    {"id":"liquidity","intent":"流动性","meaning":"股票交易活跃和成交能力","examples":["流动性好","成交活跃"],"ambiguities":[],"bankMetrics":["turnover_rate_pct","average_trading_value_cny"],"clarifyWhen":["观察期间未指定"],"notes":"当前数据未验证。"},
+    {"id":"market_momentum","intent":"市场表现","meaning":"指定期间内收益或相对强弱表现","examples":["最近没怎么涨的","涨得快"],"ambiguities":["绝对收益、相对收益和趋势区间不同"],"bankMetrics":["period_return_pct","relative_strength_pct"],"clarifyWhen":["观察区间或比较基准未指定"],"notes":"不得据此预测未来收益。"},
+    {"id":"leadership","intent":"行业龙头","meaning":"行业影响力或规模领先，定义可因口径而异","examples":["银行龙头"],"ambiguities":["市值、资产规模、市场份额、经营表现等口径不同"],"bankMetrics":["market_cap_cny"],"clarifyWhen":["用户未定义龙头口径"],"notes":"不能直接等同市值最大。"}
+  ]
+}

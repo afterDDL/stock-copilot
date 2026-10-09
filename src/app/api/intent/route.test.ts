@@ -34,6 +34,33 @@ describe('POST /api/intent', () => {
     }));
   });
 
+  it('keeps the fully supported natural-language bank query executable with local mapping provenance', async () => {
+    process.env.DEEPSEEK_API_KEY = 'test-secret';
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      status: 'completed',
+      output_text: JSON.stringify({ condition_changes: [], sort_direction: null, assumptions: [], clarifications: [], unsupported_requests: [] }),
+    }), { status: 200 }));
+
+    const response = await POST(new Request('http://localhost/api/intent', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query: '帮我找些盘子大、业绩还在增长的银行股，利润增长越快越好。' }),
+    }));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.intent.unsupportedRequests).toEqual([]);
+    expect(body.intent.canExecute).toBe(true);
+    expect(body.intent.strategy.conditions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'market_cap_cny', operator: 'gte', value: 100_000_000_000 }),
+      expect.objectContaining({ field: 'net_profit_parent_yoy_pct', operator: 'gt', value: 0 }),
+    ]));
+    expect(body.intent.strategy.sort).toEqual({ field: 'net_profit_parent_yoy_pct', direction: 'desc' });
+    expect(body.intent.mappings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ concept: 'company_size', state: 'assumed', field: 'market_cap_cny' }),
+      expect.objectContaining({ concept: 'profit_growth', action: 'preference' }),
+    ]));
+  });
+
   it('rejects malformed requests before calling DeepSeek', async () => {
     process.env.DEEPSEEK_API_KEY = 'test-secret';
     vi.stubGlobal('fetch', fetchMock);

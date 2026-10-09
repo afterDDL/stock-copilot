@@ -131,4 +131,24 @@ describe('CopilotWorkspace', () => {
     expect(screen.getByRole('status')).toHaveTextContent('本地保存暂不可用');
     expect(screen.getByRole('textbox', { name: '请输入选股需求' })).toBeEnabled();
   });
+
+  it('shows resolver provenance and separates matching, sorting, and research facts', async () => {
+    const user = userEvent.setup();
+    const mappings = [
+      { originalExpression: '盘子大一点', concept: 'company_size', field: 'market_cap_cny', state: 'assumed', action: 'condition', explanation: '银行场景产品预设，不是行业标准。', unit: '元', statisticDate: '2026-10-09', defaultSource: '产品预设：1000亿元' },
+    ];
+    render(<CopilotWorkspace
+      intentRequest={vi.fn().mockResolvedValue({ strategy, assumptions: ['按总市值≥1000亿元处理'], clarifications: [], unsupportedRequests: [], canExecute: true, mappings })}
+      snapshotRequest={vi.fn().mockResolvedValue({ mode: 'historical', snapshot, coverage: snapshot.coverage, evidence: { source: 'fixture', capturedAt: '2026-10-09T00:00:00Z', statisticDates: {}, liveRequests: [] } })}
+    />);
+    await user.type(screen.getByRole('textbox', { name: '请输入选股需求' }), '盘子大一点');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByRole('region', { name: '意图映射' })).toHaveTextContent('盘子大一点');
+    expect(screen.getByRole('region', { name: '意图映射' })).toHaveTextContent('产品预设：1000亿元');
+    await user.click(screen.getByRole('button', { name: '运行筛选' }));
+    expect(await screen.findByRole('heading', { name: '条件匹配' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '偏好排序' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '研究辅助' })).toHaveTextContent('样本');
+    expect(screen.getByText('条件匹配和排序不等于投资价值判断')).toBeInTheDocument();
+  });
 });

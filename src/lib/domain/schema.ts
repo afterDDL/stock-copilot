@@ -39,7 +39,7 @@ export const strategySchema = z.object({
   industry: z.literal('bank'),
   conditions: z.array(conditionSchema).min(1),
   sort: z.object({
-    field: z.literal('net_profit_parent_yoy_pct'),
+    field: z.enum(['market_cap_cny', 'net_profit_parent_yoy_pct']),
     direction: z.enum(['asc', 'desc']),
   }).strict(),
 }).strict().superRefine((strategy, context) => {

@@ -55,7 +55,7 @@ export function StrategyEditor({ strategy, disabled, onRename, onConditionChange
     <div className="editor-actions"><label className="sr-only" htmlFor="add-condition">添加筛选条件</label><select id="add-condition" value={newField} onChange={(event) => setNewField(event.target.value as Condition['field'])}>
       <option value="market_cap_cny">总市值</option><option value="net_profit_parent_yoy_pct">归母净利润同比增长率</option>
     </select><button className="secondary-button" type="button" disabled={disabled || strategy.conditions.some((condition) => condition.field === newField)} onClick={() => onConditionAdd(newField)}>添加条件</button></div>
-    <label className="field-label sort-label" htmlFor="sort-direction">利润增长排序</label>
+    <label className="field-label sort-label" htmlFor="sort-direction">{strategy.sort.field === 'market_cap_cny' ? '总市值排序' : '利润增长排序'}</label>
     <select id="sort-direction" value={strategy.sort.direction} disabled={disabled} onChange={(event) => onSortDirectionChange(event.target.value as 'asc' | 'desc')}><option value="desc">由高到低</option><option value="asc">由低到高</option></select>
     <button className="primary-button run-button" type="button" onClick={onRun} disabled={!canRun}>{disabled ? '正在筛选…' : '运行筛选'}</button>
     {!canRun && <p className="run-hint">请先完成澄清并修复冲突，再运行筛选。</p>}
