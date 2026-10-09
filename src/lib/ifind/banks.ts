@@ -35,6 +35,10 @@ function dateFor(header: string, role: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
     throw new SnapshotError(`Invalid statistic date for ${role}.`, 'invalid_date');
   }
+  const expectedDate = role === 'market capitalization' ? '2026-10-09' : '2026-06-30';
+  if (date !== expectedDate) {
+    throw new SnapshotError(`Expected statistic date ${expectedDate} for ${role}.`, 'wrong_statistic_date');
+  }
   return date;
 }
 

@@ -33,3 +33,12 @@
 - The MCP client reads credentials only from `IFIND_MCP_AUTH_TOKEN`; query responses are parsed through the content envelope and rejected on empty, malformed, truncated, miscolumned, duplicate, misaligned, or incomplete results. A single content-layer 429 retry is covered.
 - Default live endpoint behavior safely serves the validated historical snapshot with sanitized error details on acquisition failure. `mode=historical` bypasses live acquisition.
 - Concern: an early environment-variable name scan printed the local credential in tool output. It was not committed or written into repository files. The secret-pattern scan passed; rotating the credential is still prudent.
+
+## Review fix round
+
+- RED: new adapter tests failed because parseable but incorrect market cap and profit statistic dates were accepted. The route fallback test failed because it exposed the mocked upstream error message.
+- GREEN: controlled dates are now enforced as market cap `2026-10-09` and profit growth `2026-06-30`. The route always emits a fixed safe fallback message and validates the error code before returning it.
+- Focused adapter suite: 4 files, 12 tests pass.
+- Full suite: 12 files and 48 tests pass; 4 unrelated UI/intent tests fail (ambiguous compare button query, two intent thresholds, unsupported metric detection).
+- Typecheck: passes.
+- Review-fix files: `src/lib/ifind/banks.ts`, `src/lib/ifind/banks.test.ts`, `src/lib/ifind/errors.ts`, and `src/app/api/bank-snapshot/route.test.ts`.

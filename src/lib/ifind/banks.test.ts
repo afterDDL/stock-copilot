@@ -33,4 +33,24 @@ describe('mergeBankTables', () => {
     expect(() => mergeBankTables([...caps, caps[0]], profits, { capturedAt: '2026-10-09T15:53:37.301Z', expectedStocks: 2 })).toThrowError(/duplicate/i);
     expect(() => mergeBankTables(caps, profits.slice(0, 1), { capturedAt: '2026-10-09T15:53:37.301Z', expectedStocks: 2 })).toThrowError(/coverage/i);
   });
+
+  it('rejects a parseable market cap date outside the controlled 2026-10-09 query', () => {
+    const wrongDateCaps = caps.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [
+      key === headers.marketCap ? '总市值[20260930]' : key,
+      value,
+    ])));
+
+    expect(() => mergeBankTables(wrongDateCaps, profits, { capturedAt: '2026-10-09T15:53:37.301Z', expectedStocks: 2 }))
+      .toThrowError(/2026-10-09/);
+  });
+
+  it('rejects a parseable profit date outside the controlled 2026-06-30 query', () => {
+    const wrongDateProfits = profits.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [
+      key === headers.profit ? '归属于母公司所有者的净利润同比增长率[20260331]' : key,
+      value,
+    ])));
+
+    expect(() => mergeBankTables(caps, wrongDateProfits, { capturedAt: '2026-10-09T15:53:37.301Z', expectedStocks: 2 }))
+      .toThrowError(/2026-06-30/);
+  });
 });

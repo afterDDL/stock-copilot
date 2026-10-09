@@ -24,7 +24,12 @@ export class IfindError extends Error {
 
 export function safeErrorDetails(error: unknown): { code: string; message: string; retryable: boolean } {
   if (error instanceof SnapshotError || error instanceof IfindError) {
-    return { code: error.code, message: error.message, retryable: error.retryable };
+    const code = /^[a-z][a-z0-9_]{0,47}$/.test(error.code) ? error.code : 'snapshot_unavailable';
+    return {
+      code,
+      message: 'Live iFinD snapshot unavailable; serving historical data.',
+      retryable: error.retryable,
+    };
   }
   return { code: 'snapshot_unavailable', message: 'Live iFinD snapshot unavailable; serving historical data.', retryable: true };
 }
