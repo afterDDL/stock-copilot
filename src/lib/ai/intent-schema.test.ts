@@ -47,6 +47,20 @@ describe('parseIntentOutput', () => {
     expect(result.strategy.conditions.find((item) => item.field === 'net_profit_parent_yoy_pct')).toMatchObject({ operator: 'gt', value: 0 });
   });
 
+  it('uses an explicit market-cap threshold instead of the fuzzy default', () => {
+    const result = parseIntentOutput('盘子大，市值至少2000亿元', emptyDelta, null);
+    expect(result.strategy.conditions.find((item) => item.field === 'market_cap_cny')).toMatchObject({
+      operator: 'gte', value: 200000000000, aiInferred: false,
+    });
+  });
+
+  it('uses an explicit profit-growth threshold instead of the fuzzy default', () => {
+    const result = parseIntentOutput('业绩增长超过10%', emptyDelta, null);
+    expect(result.strategy.conditions.find((item) => item.field === 'net_profit_parent_yoy_pct')).toMatchObject({
+      operator: 'gt', value: 10,
+    });
+  });
+
   it('keeps unrelated current strategy conditions during a partial edit', () => {
     const result = parseIntentOutput('把市值门槛提高到2000亿元', {
       ...emptyDelta,
@@ -70,6 +84,12 @@ describe('parseIntentOutput', () => {
   it('rejects unsupported metrics and blocks execution', () => {
     const result = parseIntentOutput('按经营现金流筛选银行股', emptyDelta, null);
     expect(result.unsupportedRequests.some(({ request }) => request.includes('经营现金流'))).toBe(true);
+    expect(result.canExecute).toBe(false);
+  });
+
+  it('blocks an unsupported metric clause even when the model omits it', () => {
+    const result = parseIntentOutput('按存贷比筛选银行股', emptyDelta, null);
+    expect(result.unsupportedRequests.some(({ request }) => request.includes('存贷比'))).toBe(true);
     expect(result.canExecute).toBe(false);
   });
 

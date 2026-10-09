@@ -112,6 +112,48 @@ function detectUnsupportedFinancialMetric(query: string): string | null {
   return genericMetric;
 }
 
+const supportedMetricSubject = (subject: string): boolean => {
+  const normalized = subject
+    .replace(/(?:至少|不低于|大于等于|大于|小于|超过|高于|低于|达到|≥|<=|>=|<|>).*$/, '')
+    .replace(/[\d.]+\s*(?:万亿|亿元|亿|万元|元|%?)$/g, '')
+    .replace(/(?:按照?|根据|筛选|排序|降序|升序|条件|指标|选股|股票|个股|银行股?|的|里|中)/g, '')
+    .replace(/\s/g, '');
+  if (!normalized) return true;
+  return normalized.split(/[和与及、]/).filter(Boolean).every((term) =>
+    /^(?:行业|所属行业|市值|总市值|盘子大|大盘|业绩增长|利润增长|归母净利润(?:同比|同比增长率)?|净利润同比)$/.test(term));
+};
+
+function detectUnsupportedMetricClauses(query: string): string[] {
+  const unsupported = new Set<string>();
+  const selectionClauses = /(?:按|按照)\s*([^，,。；;]+?)\s*(?:进行)?(?:筛选|筛|排序|升序|降序)/g;
+  for (const match of query.matchAll(selectionClauses)) {
+    const subject = match[1]?.trim();
+    if (subject && !supportedMetricSubject(subject)) unsupported.add(subject);
+  }
+  const thresholdClauses = /([^，,。；;]{1,20}?)(?:至少|不低于|大于等于|大于|小于|超过|高于|低于|达到|≥|<=|>=|<|>)\s*\d+(?:\.\d+)?\s*(?:万亿|亿元|亿|万元|元|%?)/g;
+  for (const match of query.matchAll(thresholdClauses)) {
+    const subject = match[1]?.trim().replace(/^(?:找|筛选|银行股?|个股|股票|并且|且|和|的)+/, '');
+    if (subject && !supportedMetricSubject(subject)) unsupported.add(subject);
+  }
+  return [...unsupported];
+}
+
+function extractExplicitMarketCap(query: string): { value: number; operator: Condition['operator'] } | null {
+  const match = query.match(/(?:总市值|市值)\s*(至少|不低于|大于等于|大于|超过|高于|达到|≥|>=|>)\s*(\d+(?:\.\d+)?)\s*(万亿|亿元|亿|万元|元)/);
+  if (!match) return null;
+  const amount = Number(match[2]);
+  const multiplier = match[3] === '万亿' ? 1e12 : match[3] === '万元' ? 1e4 : match[3] === '元' ? 1 : 1e8;
+  const operator: Condition['operator'] = ['大于', '超过', '高于', '>'].includes(match[1] ?? '') ? 'gt' : 'gte';
+  return { value: amount * multiplier, operator };
+}
+
+function extractExplicitProfitThreshold(query: string): { value: number; operator: Condition['operator'] } | null {
+  const match = query.match(/(?:归母净利润(?:同比增长率|同比)?|净利润同比|业绩增长|利润增长)\s*(至少|不低于|大于等于|大于|超过|高于|≥|>=|>)\s*(\d+(?:\.\d+)?)\s*%/);
+  if (!match) return null;
+  const operator: Condition['operator'] = ['大于', '超过', '高于', '>'].includes(match[1] ?? '') ? 'gt' : 'gte';
+  return { value: Number(match[2]), operator };
+}
+
 export function parseIntentOutput(query: string, output: unknown, currentStrategy: Strategy | null): IntentResponse {
   const parsed = parseModelOutput(output);
   if (!parsed.success) throw new IntentOutputError('schema_invalid', 'DeepSeek intent did not match the required schema.');
@@ -155,6 +197,20 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
     if (index >= 0) conditions[index] = { ...profitGrowth, statisticDate: conditions[index].statisticDate };
     else conditions.push(profitGrowth);
   }
+  const explicitMarketCap = extractExplicitMarketCap(query);
+  if (explicitMarketCap) {
+    const condition = freshCondition('market_cap_cny', explicitMarketCap.value, explicitMarketCap.operator, '用户明确指定的总市值门槛', false);
+    const index = conditions.findIndex((item) => item.field === 'market_cap_cny');
+    if (index >= 0) conditions[index] = { ...condition, statisticDate: conditions[index].statisticDate };
+    else conditions.push(condition);
+  }
+  const explicitProfit = extractExplicitProfitThreshold(query);
+  if (explicitProfit) {
+    const condition = freshCondition('net_profit_parent_yoy_pct', explicitProfit.value, explicitProfit.operator, '用户明确指定的归母净利润同比增长率门槛', false);
+    const index = conditions.findIndex((item) => item.field === 'net_profit_parent_yoy_pct');
+    if (index >= 0) conditions[index] = { ...condition, statisticDate: conditions[index].statisticDate };
+    else conditions.push(condition);
+  }
   if (!conditions.some((condition) => condition.field === 'industry' && condition.value === '银行')) {
     conditions.unshift(freshCondition('industry', '银行', 'eq', '银行股基础范围', false));
   }
@@ -170,6 +226,11 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
   const unsupportedMetric = detectUnsupportedFinancialMetric(query);
   if (unsupportedMetric && !unsupportedRequests.some(({ request }) => request.toLowerCase() === unsupportedMetric.toLowerCase())) {
     unsupportedRequests.push({ request: unsupportedMetric, reason: '当前仅支持所属行业、总市值和归母净利润同比增长率。' });
+  }
+  for (const clause of detectUnsupportedMetricClauses(query)) {
+    if (!unsupportedRequests.some(({ request }) => request === clause)) {
+      unsupportedRequests.push({ request: clause, reason: '该筛选或阈值指标不在当前支持范围内；当前仅支持行业、总市值和归母净利润同比增长率。' });
+    }
   }
   if (/预测.{0,20}(收益|回报|涨幅|股价|价格)|未来.{0,20}(收益|回报|涨幅|股价|价格)|收益率|回报率|稳赚|目标价/.test(query) && !unsupportedRequests.some(({ request }) => /收益预测|回报预测|股价预测/.test(request))) {
     unsupportedRequests.push({ request: '收益预测', reason: '当前功能不提供收益率、股价或回报预测；选股结果仅基于历史数据条件。' });

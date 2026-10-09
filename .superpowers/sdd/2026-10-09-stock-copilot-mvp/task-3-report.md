@@ -44,3 +44,9 @@ The endpoint accepts `{ query, currentStrategy? }` and returns `{ intent: { stra
 - RED: Added adversarial cases proving that valid model updates could override the fuzzy market-cap/profit-growth meanings, an omitted `unsupported_requests` let “经营现金流” through, and an `industry=互联网` update produced both internet and bank conditions. All three tests failed before the fixes.
 - GREEN: The focused Task 3 run now passes 14/14 tests. The parser reapplies the fixed fuzzy meanings after model deltas, detects common and suffix-shaped Chinese financial metric terms without flagging ordinary prose such as “经营稳健、治理规范”, and rejects non-bank industry updates into `unsupportedRequests` so execution is blocked.
 - Latest full suite: 12 test files passed, 2 failed; 43 tests passed, 3 failed. Failures are in peer UI work: two `CopilotWorkspace` tests fail due to duplicate “浦发银行” buttons, and `useCopilot` still reports `canRun=false` after clarification is answered. Task 3 focused tests passed in the same run.
+
+## Follow-up review fixes, round 2
+
+- RED: Added regressions for “按存贷比筛选银行股” with an empty model unsupported list, “盘子大，市值至少2000亿元”, and “业绩增长超过10%”. All three failed before the fix.
+- GREEN: Focused Task 3 tests now pass 17/17. A local clause recognizer blocks unsupported subjects in explicit selection/sort or numeric threshold clauses, while the existing ordinary-prose case remains executable. Explicit market-cap and profit-growth numeric thresholds are extracted locally and take precedence over both model deltas and fuzzy defaults.
+- Full suite was last run immediately before this round: 12 files passed, 2 failed (43 passed, 3 failed) in the peer UI tests listed above. This round reran the focused Task 3 tests only.
