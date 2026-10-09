@@ -1,0 +1,1214 @@
+{
+  "mode": "historical",
+  "snapshot": {
+    "snapshotId": "ifind-banks-2026-10-09",
+    "source": "historical",
+    "asOf": "2026-10-09",
+    "stocks": [
+      {
+        "code": "000001",
+        "name": "平安银行",
+        "industry": "银行-银行-股份制银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-股份制银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 224914591914.82,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 3.321270607157217,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "001227",
+        "name": "兰州银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 12074877996.16,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": -8.949258627957322,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "002142",
+        "name": "宁波银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 232710539510.08,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 12.117519631735716,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "002807",
+        "name": "江阴银行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 11317484040.06,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 2.3399665482656515,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "002839",
+        "name": "张家港行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 10510683388.2,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 2.7085337813353236,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "002936",
+        "name": "郑州银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 13716078943.728,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 3.0294483270132773,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "002948",
+        "name": "青岛银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 31496649683.913,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 18.075898877632696,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "002958",
+        "name": "青农商行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 16167103438.59,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 2.8367455091461746,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "002966",
+        "name": "苏州银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 42158342763.73,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 8.509490926010518,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "600000",
+        "name": "浦发银行",
+        "industry": "银行-银行-股份制银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-股份制银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 317737697382,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 4.0824561993476145,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "600015",
+        "name": "华夏银行",
+        "industry": "银行-银行-股份制银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-股份制银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 100264049348.4,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": -18.352223190932868,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "600016",
+        "name": "民生银行",
+        "industry": "银行-银行-股份制银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-股份制银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 148069902885.12,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": -8.62020579981291,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "600036",
+        "name": "招商银行",
+        "industry": "银行-银行-股份制银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-股份制银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 1060061530679.4,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 2.021887094621647,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "600908",
+        "name": "无锡银行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 12882781549.65,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 2.8382487496973026,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "600919",
+        "name": "江苏银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 227005883607.31,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 8.089489422094834,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "600926",
+        "name": "杭州银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 124320393698.2,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 9.871100853554053,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "600928",
+        "name": "西安银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 15777777779.75,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 2.1386550569692626,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601009",
+        "name": "南京银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 147250085887.95,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 8.169953519295772,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601077",
+        "name": "渝农商行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 72561726601.928,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 6.093345368198419,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601128",
+        "name": "常熟银行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 22728163792.32,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 10.639013270704494,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601166",
+        "name": "兴业银行",
+        "industry": "银行-银行-股份制银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-股份制银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 381989707203.25,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": -4.659140956398786,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601169",
+        "name": "北京银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 117766422395.04,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 5.626785358400318,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601187",
+        "name": "厦门银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 18025243475.04,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 7.312110799554052,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601229",
+        "name": "上海银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 137711047511.34,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 0.5130500492869677,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601288",
+        "name": "农业银行",
+        "industry": "银行-银行-国有大型银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-国有大型银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 2399355412151.3,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 4.92509497527059,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601328",
+        "name": "交通银行",
+        "industry": "银行-银行-国有大型银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-国有大型银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 667109169568.56,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 4.037726008344923,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601398",
+        "name": "工商银行",
+        "industry": "银行-银行-国有大型银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-国有大型银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 2774719044643.1,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 3.318798593719327,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601528",
+        "name": "瑞丰银行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 10046266342.4,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 0.9425192522343383,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601577",
+        "name": "长沙银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 39089502488.88,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 5.057955791571214,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601658",
+        "name": "邮储银行",
+        "industry": "银行-银行-国有大型银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-国有大型银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 634628548283.34,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 4.62135370114569,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601665",
+        "name": "齐鲁银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 43569205077,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 16.0605478785751,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601818",
+        "name": "光大银行",
+        "industry": "银行-银行-股份制银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-股份制银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 172789882817.2,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": -24.00698562261392,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601825",
+        "name": "沪农商行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 82460000004.75,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 0.8659855676677427,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601838",
+        "name": "成都银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 81759418017.24,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 4.351984949294702,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601860",
+        "name": "紫金银行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 9445649034.66,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 3.3331068448473506,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601916",
+        "name": "浙商银行",
+        "industry": "银行-银行-股份制银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-股份制银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 74808709124.79,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 2.047737054910656,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601939",
+        "name": "建设银行",
+        "industry": "银行-银行-国有大型银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-国有大型银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 2240660125434.5,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 4.620054789111281,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601963",
+        "name": "重庆银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 33568025344.921,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 10.285646384405345,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601988",
+        "name": "中国银行",
+        "industry": "银行-银行-国有大型银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-国有大型银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 2054700941082.6,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 5.104982524172769,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601997",
+        "name": "贵阳银行",
+        "industry": "银行-银行-城商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-城商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 20584395167.88,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": -4.612049524973448,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "601998",
+        "name": "中信银行",
+        "industry": "银行-银行-股份制银行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-股份制银行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 474570119324.14,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 3.081309282307144,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      },
+      {
+        "code": "603323",
+        "name": "苏农银行",
+        "industry": "银行-银行-农商行",
+        "metrics": {
+          "industry": {
+            "value": "银行-银行-农商行",
+            "unit": "行业",
+            "date": null,
+            "source": "historical",
+            "coverage": "available"
+          },
+          "market_cap_cny": {
+            "value": 9947372202.88,
+            "unit": "元",
+            "date": "2026-10-09",
+            "source": "historical",
+            "coverage": "available"
+          },
+          "net_profit_parent_yoy_pct": {
+            "value": 3.0156336327212334,
+            "unit": "%",
+            "date": "2026-06-30",
+            "source": "historical",
+            "coverage": "available"
+          }
+        }
+      }
+    ],
+    "coverage": {
+      "expectedStocks": 42,
+      "returnedStocks": 42,
+      "complete": true,
+      "metrics": {
+        "industry": {
+          "available": 42,
+          "missing": 0
+        },
+        "market_cap_cny": {
+          "available": 42,
+          "missing": 0
+        },
+        "net_profit_parent_yoy_pct": {
+          "available": 42,
+          "missing": 0
+        }
+      }
+    }
+  },
+  "evidence": {
+    "source": "iFinD MCP search_stocks controlled single-indicator queries",
+    "capturedAt": "2026-10-09T16:13:30.978Z",
+    "statisticDates": {
+      "marketCap": "2026-10-09",
+      "netProfitYoy": "2026-06-30"
+    },
+    "liveRequests": 2
+  }
+}
