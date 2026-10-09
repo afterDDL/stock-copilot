@@ -13,7 +13,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-访问 <http://localhost:3000>。`.env.local` 已由 `.gitignore` 排除，`.env.example` 仅有空值模板。生产构建和启动命令为 `npm run build` 与 `npm run start`；本报告不据此断言本次构建已通过。
+访问 <http://localhost:3000>。`.env.local` 已由 `.gitignore` 排除，`.env.example` 仅有空值模板。生产构建和启动命令为 `npm run build` 与 `npm run start`；2026-10-10 的本地生产构建已通过，证据见 `TEST_REPORT.md`。
 
 ## Vercel 验证清单（尚未执行）
 
