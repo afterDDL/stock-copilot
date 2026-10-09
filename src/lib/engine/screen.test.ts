@@ -48,6 +48,33 @@ describe('screenUniverse', () => {
     expect(result.excluded).toHaveLength(0);
   });
 
+  it('classifies a statistic-date mismatch as unknown unless another condition definitively fails', () => {
+    const datedStrategy: Strategy = {
+      ...strategy,
+      conditions: [
+        ...strategy.conditions.map((condition) => condition.field === 'market_cap_cny'
+          ? { ...condition, statisticDate: '2026-10-08' }
+          : condition),
+        { field: 'net_profit_parent_yoy_pct', operator: 'gte', value: 15, unit: '%',
+          statisticDate: '2026-06-30', sourceExpression: '归母净利润同比增长率[20260630]',
+          aiInferred: false, editable: true },
+      ],
+    };
+    const failedCondition = stock('000006', 150_000_000_000, 10);
+    const result = screenUniverse(snapshot([
+      stock('000005', 150_000_000_000, 20),
+      failedCondition,
+    ]), datedStrategy);
+    const mismatch = result.unknown[0]?.evidence.find((item) => item.condition.field === 'market_cap_cny');
+
+    expect(result.unknown.map((item) => item.stock.code)).toEqual(['000005']);
+    expect(mismatch?.status).toBe('unknown');
+    expect(mismatch?.explanation).toBe(
+      '总市值数据日期为 2026-10-09，与策略指定日期 2026-10-08 不符，无法判定。',
+    );
+    expect(result.excluded.map((item) => item.stock.code)).toEqual(['000006']);
+  });
+
   it('sorts matching stocks by profit growth descending with stock code as a stable tie-breaker', () => {
     const result = screenUniverse(snapshot([
       stock('000003', 300_000_000_000, 20),

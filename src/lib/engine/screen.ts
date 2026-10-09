@@ -38,7 +38,8 @@ export function screenUniverse(
   for (const stock of snapshot.stocks) {
     const evidence = strategy.conditions.map((condition) => {
       const metric = metricValue(stock, condition);
-      const status: ConditionEvidence['status'] = metric.value === null || metric.coverage === 'missing'
+      const dateMismatch = condition.statisticDate !== null && metric.date !== condition.statisticDate;
+      const status: ConditionEvidence['status'] = metric.value === null || metric.coverage === 'missing' || dateMismatch
         ? 'unknown'
         : evaluate(metric.value, condition);
       return {

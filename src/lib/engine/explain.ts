@@ -29,6 +29,9 @@ export function explainCondition(
   if (actual === null) {
     return `${label}缺少数据${dateText}，无法判定。`;
   }
+  if (condition.statisticDate !== null && date !== condition.statisticDate) {
+    return `${label}数据日期为 ${date ?? '未知'}，与策略指定日期 ${condition.statisticDate} 不符，无法判定。`;
+  }
   if (condition.field === 'industry') {
     return `${label}为 ${actual}${dateText}。`;
   }
