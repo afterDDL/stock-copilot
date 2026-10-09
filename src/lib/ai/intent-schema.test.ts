@@ -31,6 +31,7 @@ describe('parseIntentOutput', () => {
     });
     expect(result.strategy.conditions.find((item) => item.field === 'net_profit_parent_yoy_pct')).toMatchObject({ operator: 'gt', value: 0 });
     expect(result.strategy.sort.direction).toBe('desc');
+    expect(result.canExecute).toBe(true);
   });
 
   it('does not let valid model updates override fuzzy defaults', () => {
@@ -52,6 +53,7 @@ describe('parseIntentOutput', () => {
     expect(result.strategy.conditions.find((item) => item.field === 'market_cap_cny')).toMatchObject({
       operator: 'gte', value: 200000000000, aiInferred: false,
     });
+    expect(result.canExecute).toBe(true);
   });
 
   it('uses an explicit profit-growth threshold instead of the fuzzy default', () => {
@@ -59,6 +61,7 @@ describe('parseIntentOutput', () => {
     expect(result.strategy.conditions.find((item) => item.field === 'net_profit_parent_yoy_pct')).toMatchObject({
       operator: 'gt', value: 10,
     });
+    expect(result.canExecute).toBe(true);
   });
 
   it('keeps unrelated current strategy conditions during a partial edit', () => {
@@ -70,6 +73,7 @@ describe('parseIntentOutput', () => {
     expect(result.strategy.conditions.find((item) => item.field === 'net_profit_parent_yoy_pct')).toEqual(current.conditions[2]);
     expect(result.strategy.conditions.find((item) => item.field === 'market_cap_cny')?.value).toBe(200000000000);
     expect(result.strategy.version).toBe(4);
+    expect(result.canExecute).toBe(true);
   });
 
   it('carries clarifications and blocks execution until they are resolved', () => {
@@ -106,6 +110,29 @@ describe('parseIntentOutput', () => {
   });
 
   it.each([
+    ['筛选授信质量好的银行股', ['授信质量']],
+    ['存贷比偏低的银行股', ['存贷比']],
+    ['筛选市值大且授信质量好的银行股', ['授信质量']],
+    ['盘子大，市值至少2000亿元且客户满意度高', ['客户满意度']],
+    ['银行股要品牌口碑好', ['品牌口碑']],
+    ['找地域布局广泛的银行股', ['地域布局']],
+    ['筛选服务体验优秀且团队稳定的银行股', ['服务体验', '团队稳定']],
+    ['筛选市值大且授信质量好、治理透明、服务体验优秀的银行股', ['授信质量', '治理透明', '服务体验']],
+    ['筛选市值好且业绩增长的银行股', ['好']],
+    ['筛选盘子大且业绩增长、增长潜力强的银行股', ['增长潜力']],
+    ['按总市值降序排序银行股', ['排序']],
+    ['按利润增速升序排序银行股', ['升序']],
+    ['筛选银行股且规模超过2000亿元', ['规模']],
+    ['筛选银行股，至少2000亿元', ['2000']],
+  ])('blocks every uncovered criterion in %s even when the model omits it', (query, criteria) => {
+    const result = parseIntentOutput(query, emptyDelta, null);
+    for (const criterion of criteria) {
+      expect(result.unsupportedRequests.some(({ request }) => request.includes(criterion))).toBe(true);
+    }
+    expect(result.canExecute).toBe(false);
+  });
+
+  it.each([
     '按净利润同比增长率筛选银行股',
     '按归母净利润同比筛选银行股',
     '按利润增速筛选银行股',
@@ -113,19 +140,35 @@ describe('parseIntentOutput', () => {
     '按业绩增长筛选银行股',
     '按利润增长筛选银行股',
     '按市值筛选银行股',
-    '按总市值排序银行股',
+    '按总市值筛选银行股',
     '按大盘筛选银行股',
     '按盘子大筛选银行股',
+    '按利润同比增长率筛选银行股',
+    '按归母净利润同比增长率筛选银行股',
+    '按净利润同比筛选银行股',
+    '按归母净利润增速筛选银行股',
+    '按业绩增速筛选银行股',
+    '按归母净利润筛选银行股',
+    '按大市值筛选银行股',
+    '按银行行业筛选银行股',
+    '按所属行业筛选银行股',
+    '按行业筛选银行股',
+    '请帮我找盘子大且业绩增长的银行股，按利润增速从高到低排序',
+    '按归母净利润同比降序排序银行股',
+    '筛选业绩增长越高越好的银行股',
+    '筛选总市值不超过2000亿元、归母净利润同比增长率大于10%的银行股',
+    '取消市值门槛，保留银行股和业绩增长条件',
   ])('allows supported metric alias in %s', (query) => {
     const result = parseIntentOutput(query, emptyDelta, null);
     expect(result.unsupportedRequests).toEqual([]);
     expect(result.canExecute).toBe(true);
   });
 
-  it('does not treat ordinary non-metric prose as an unsupported indicator', () => {
+  it('blocks business quality and governance when expressed as selection preferences', () => {
     const result = parseIntentOutput('找经营稳健、治理规范的银行股', emptyDelta, null);
-    expect(result.unsupportedRequests).toEqual([]);
-    expect(result.canExecute).toBe(true);
+    expect(result.unsupportedRequests.some(({ request }) => request.includes('经营稳健'))).toBe(true);
+    expect(result.unsupportedRequests.some(({ request }) => request.includes('治理规范'))).toBe(true);
+    expect(result.canExecute).toBe(false);
   });
 
   it('rejects a non-bank industry update and keeps the bank scope', () => {

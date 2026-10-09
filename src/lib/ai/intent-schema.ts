@@ -92,70 +92,30 @@ function parseModelOutput(output: unknown) {
   return { success: true as const, data: parsed.data };
 }
 
-function detectUnsupportedFinancialMetric(query: string): string | null {
-  const patterns = [
-    /经营现金流|现金流量(?:表)?|自由现金流|现金流/i,
-    /营业收入|主营业务收入|营收|销售收入/i,
-    /净资产收益率|总资产收益率|资产负债率|负债率|资本充足率|不良贷款率|拨备覆盖率|净息差/i,
-    /市盈率|市净率|股息率|股息|股利|分红/i,
-    /每股(?:收益|净资产|现金流)|(?:ROE|ROA|ROIC|EPS|PE|PB)\b/i,
-    /[\u4e00-\u9fff]{2,10}(?:周转率|收益率|利润率|费用率|现金比率|流动比率|速动比率|偿债能力)/,
-    /财务指标|财务比率|盈利能力指标/,
-  ];
-  const match = patterns.map((pattern) => query.match(pattern)?.[0]).find(Boolean);
-  if (match) return match;
-
-  const genericMetric = query.match(/[\u4e00-\u9fff]{2,10}(?:比率|增长率|收益率|周转率|利润率|现金流|每股收益)/)?.[0];
-  if (!genericMetric) return null;
-  const normalizedMetric = genericMetric.replace(/^(?:按|按照|根据|筛选|排序)+/, '');
-  if (supportedMetricAliases.includes(normalizedMetric)) return null;
-  if (/^(?:归母净利润同比增长率|净利润同比增长率|利润同比增长率)$/.test(normalizedMetric)) return null;
-  if (/业绩增长|利润增长|归母净利润.*同比.*增长/.test(query) && /增长率/.test(genericMetric)) return null;
-  return genericMetric;
-}
-
-const supportedMetricAliases = [
+const profitGrowthAliases = [
   '归母净利润同比增长率', '净利润同比增长率', '利润同比增长率', '归母净利润同比', '净利润同比',
-  '归母净利润增速', '净利润增速', '利润增速', '业绩增速', '归母净利润', '总市值', '大市值',
-  '盘子大', '大盘', '市值', '银行行业', '所属行业', '行业', '业绩增长', '利润增长',
+  '归母净利润增速', '净利润增速', '利润增速', '业绩增速', '归母净利润', '业绩增长', '利润增长',
 ].sort((left, right) => right.length - left.length);
 
-function residualMetricText(subject: string): string {
-  let residual = subject
-    .replace(/(?:至少|不低于|大于等于|大于|小于|超过|高于|低于|达到|≥|<=|>=|<|>).*$/, '')
-    .replace(/[\d.]+\s*(?:万亿|亿元|亿|万元|元|%?)$/g, '')
-    .replace(/(?:按照?|根据|筛选|排序|降序|升序|条件|指标|选股|股票|个股|银行股?|的|里|中)/g, '');
-  for (const alias of supportedMetricAliases) residual = residual.replaceAll(alias, '');
-  return residual
-    .replace(/(?:经营稳健|经营扎实|经营良好|治理规范|治理良好|治理优秀|管理规范|管理优秀)/g, '')
-    .replace(/(?:非常|比较|相对|更加|較为|较为|偏|较|更|很|较高|较低|偏高|偏低|高|低|大|小|好|优秀|稳健|扎实|规范|良好|不错|靠谱|增长|同比|以上|以下|超过|达到|优质|较强|强劲)/g, '')
-    .replace(/[和与及、，,\s]/g, '');
-}
+// Cover only recognized P0 concepts. Modifiers, comparators and numbers belong
+// to a field span; removing them globally could hide an unsupported criterion.
+const numericComparator = '(?:大于等于|小于等于|不低于|不高于|不超过|至少|至多|大于|小于|超过|高于|低于|达到|等于|>=|<=|≥|≤|>|<|=)';
+const numericAmount = '[+-]?\\d+(?:\\.\\d+)?';
+const threshold = (unit: string) => `(?:${numericComparator}|提高到|降低到|调整到|改为|设为)?\\s*${numericAmount}\\s*(?:${unit})(?:以上|以下)?`;
+const marketCapLanguage = new RegExp(`(?:总市值|大市值|市值|盘子大|盘子|大盘)(?:门槛|阈值|条件)?(?:\\s*(?:${threshold('万亿元|万亿|亿元|亿|万元|元')}|(?:比较|相对|较为|非常|偏|较|更|很)?(?:大|小)))?`, 'g');
+const profitGrowthLanguage = new RegExp(`(?:${profitGrowthAliases.join('|')})(?:门槛|阈值|条件)?(?:\\s*(?:${threshold('%|％|百分比')}|越高越好|从高到低(?:排序|排列)?|降序(?:排序|排列)?|排序|排列|优先|(?:比较|相对|较为|非常|偏|较|更|很)?(?:高|低)|为正|正增长))?`, 'g');
+const bankLanguage = /(?:银行行业|银行业|银行股|银行|所属行业|行业)/g;
+const requestScaffolding = /(?:请帮我|帮我|请|我想要|我想|我要|寻找|找|按照|根据|按|进行|筛选|选出|选择|选股|选|把|将|门槛|阈值|条件|指标|取消|删除|移除|保留|股票|个股|并且|而且|以及|并|且|和|与|及|的|中|里)/g;
 
-const supportedMetricSubject = (subject: string): boolean => {
-  const residual = residualMetricText(subject);
-  if (!residual) return true;
-  return !/(?:比|率|收益|现金流|净息差|周转|偿债|杠杆|盈利|资产|负债|收入|利润|回款|资本|成本|每股|效率|规模|存贷)/.test(residual);
-};
-
-function detectUnsupportedMetricClauses(query: string): string[] {
-  const unsupported = new Set<string>();
-  const clauses = [
-    /(?:按|按照)\s*([^，,。；;]+?)\s*(?:进行)?(?:筛选|筛|排序|升序|降序)/g,
-    /(?:筛选|筛|找|寻找|选择|选出|选)\s*([^，,。；;]{1,40}?)(?=(?:的)?(?:银行(?:股|业)?|个股|股票)|[，,。；;]|$)/g,
-  ];
-  for (const selectionClauses of clauses) {
-    for (const match of query.matchAll(selectionClauses)) {
-      const subject = match[1]?.trim();
-      if (subject && !supportedMetricSubject(subject)) unsupported.add(subject);
-    }
-  }
-  const thresholdClauses = /([^，,。；;]{1,20}?)(?:至少|不低于|大于等于|大于|小于|超过|高于|低于|达到|≥|<=|>=|<|>)\s*\d+(?:\.\d+)?\s*(?:万亿|亿元|亿|万元|元|%?)/g;
-  for (const match of query.matchAll(thresholdClauses)) {
-    const subject = match[1]?.trim().replace(/^(?:找|筛选|银行股?|个股|股票|并且|且|和|的)+/, '');
-    if (subject && !supportedMetricSubject(subject)) unsupported.add(subject);
-  }
-  return [...unsupported];
+function detectUncoveredCriteria(query: string): string[] {
+  // Spaces preserve boundaries, so separated fragments cannot accidentally
+  // combine into a recognized alias after another field has been consumed.
+  const residual = query.normalize('NFKC')
+    .replace(marketCapLanguage, ' ')
+    .replace(profitGrowthLanguage, ' ')
+    .replace(bankLanguage, ' ')
+    .replace(requestScaffolding, ' ');
+  return [...new Set(residual.split(/[\s\p{P}]+/u).filter(Boolean))];
 }
 
 function extractExplicitMarketCap(query: string): { value: number; operator: Condition['operator'] } | null {
@@ -243,13 +203,9 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
     conditions,
     sort: { field: 'net_profit_parent_yoy_pct', direction: hasProfitCondition ? 'desc' : (delta.sort_direction ?? 'desc') },
   });
-  const unsupportedMetric = detectUnsupportedFinancialMetric(query);
-  if (unsupportedMetric && !unsupportedRequests.some(({ request }) => request.toLowerCase() === unsupportedMetric.toLowerCase())) {
-    unsupportedRequests.push({ request: unsupportedMetric, reason: '当前仅支持所属行业、总市值和归母净利润同比增长率。' });
-  }
-  for (const clause of detectUnsupportedMetricClauses(query)) {
-    if (!unsupportedRequests.some(({ request }) => request === clause)) {
-      unsupportedRequests.push({ request: clause, reason: '该筛选或阈值指标不在当前支持范围内；当前仅支持行业、总市值和归母净利润同比增长率。' });
+  for (const criterion of detectUncoveredCriteria(query)) {
+    if (!unsupportedRequests.some(({ request }) => request === criterion)) {
+      unsupportedRequests.push({ request: criterion, reason: '该要求未被当前支持的语言覆盖；仅支持银行行业、总市值和归母净利润同比增长率。' });
     }
   }
   if (/预测.{0,20}(收益|回报|涨幅|股价|价格)|未来.{0,20}(收益|回报|涨幅|股价|价格)|收益率|回报率|稳赚|目标价/.test(query) && !unsupportedRequests.some(({ request }) => /收益预测|回报预测|股价预测/.test(request))) {
