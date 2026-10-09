@@ -115,3 +115,24 @@
 - [ ] Fix each discovered defect with a failing regression test first; re-run the complete suite.
 - [ ] Write the five required delivery documents with passed/failed/unverified distinctions, startup command and `http://localhost:3000`.
 - [ ] Commit the verified delivery.
+
+### Task 6: Financial Mapping Resolver and Research Insights Addendum
+
+**Files:**
+- Create: `src/data/mapping/concepts.json`, `industry_profiles.json`, `metric_registry.json`, `intent_eval.jsonl`
+- Create: `src/lib/mapping/types.ts`, `registry.ts`, `resolver.ts`, `eval.ts`
+- Create: `src/lib/research/distribution.ts`, `insights.ts`
+- Modify: domain/intent types and prompt only as required to expose concepts, mapping states and strategy patches
+- Modify: condition/result UI to show mapping provenance, sample distribution, peer position, boundary stocks and research trade-offs
+- Test: mapping/eval/research unit tests and focused UI regressions
+
+**Interfaces:**
+- Consumes: DeepSeek concept/delta output, verified mapping assets, `Strategy`, `DataSnapshot`, current/previous `ScreeningResult`.
+- Produces: `ResolvedIntent`, mapping-state condition view models, `UniverseStatistics`, `ResearchInsights`, and per-case eval results.
+
+- [ ] Write failing tests for the 20 core language cases, registry verified/executable gating, concept ambiguity, no-semantic-substitution rules, local patch/delete/restore, real-snapshot statistics, ranks, boundary and trade-off insights.
+- [ ] Run focused tests and verify semantic failures rather than module/setup errors.
+- [ ] Add four separated mapping assets and implement the resolver/evaluator without opening unverified metrics.
+- [ ] Add deterministic distribution and insight calculators using snapshot values only.
+- [ ] Integrate mapping state/provenance and the three result layers into the existing workspace without breaking the P0 flow.
+- [ ] Run focused/full/typecheck/build; commit.
