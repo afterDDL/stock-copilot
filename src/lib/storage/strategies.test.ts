@@ -47,4 +47,17 @@ describe('saved strategy storage', () => {
     window.localStorage.setItem('stock-copilot:saved-strategies:v1', JSON.stringify(envelope));
     expect(createStrategyStorage(window.localStorage).list()).toEqual([]);
   });
+
+  it('reports malformed data and unavailable localStorage as non-blocking warnings', () => {
+    const malformed = createStrategyStorage(window.localStorage);
+    window.localStorage.setItem('stock-copilot:saved-strategies:v1', '{broken');
+    expect(malformed.list()).toEqual([]);
+    expect(malformed.warning()).toMatch(/无法读取|无效/);
+    const inaccessible = createStrategyStorage({
+      getItem: () => { throw new Error('denied'); },
+      setItem: () => { throw new Error('denied'); },
+    });
+    expect(inaccessible.list()).toEqual([]);
+    expect(inaccessible.warning()).toMatch(/暂不可用|无法访问/);
+  });
 });

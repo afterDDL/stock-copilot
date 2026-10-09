@@ -45,6 +45,14 @@ describe('CopilotWorkspace', () => {
     screen.getByRole('tab', { name: /入选/ }).focus();
     await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: /排除/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /排除/ })).toHaveAttribute('aria-controls', 'results-panel');
+    expect(screen.getByRole('tabpanel', { name: /排除/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /排除/ })).toHaveAttribute('tabindex', '0');
+    await user.keyboard('{End}');
+    expect(screen.getByRole('tab', { name: /无法判定/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /无法判定/ })).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(screen.getByRole('tab', { name: /入选/ })).toHaveAttribute('aria-selected', 'true');
     await user.click(screen.getByRole('tab', { name: /入选/ }));
     await user.click(within(screen.getByRole('table', { name: '入选股票列表' })).getByRole('button', { name: /浦发银行/ }));
     const evidence = screen.getByRole('dialog', { name: '股票证据：浦发银行' });
@@ -94,5 +102,33 @@ describe('CopilotWorkspace', () => {
     await user.click(screen.getByRole('button', { name: '移除上限条件' }));
     expect(screen.queryByRole('alert', { name: /条件存在冲突/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '运行筛选' })).toBeEnabled();
+  });
+
+  it('renders every clarification as a real answer field and resubmits the original query with the current strategy', async () => {
+    const intentRequest = vi.fn()
+      .mockResolvedValueOnce({ strategy, assumptions: [], clarifications: ['使用哪个报告期？', '总市值最低门槛是多少？'], unsupportedRequests: [], canExecute: false })
+      .mockResolvedValueOnce({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
+    const user = userEvent.setup();
+    render(<CopilotWorkspace intentRequest={intentRequest} />);
+    await user.type(screen.getByRole('textbox', { name: '请输入选股需求' }), '帮我挑选银行股');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByLabelText('澄清回答 1：使用哪个报告期？')).toBeInTheDocument();
+    expect(screen.getByLabelText('澄清回答 2：总市值最低门槛是多少？')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /按 2026 年中报/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '运行筛选' })).toBeDisabled();
+    await user.type(screen.getByLabelText('澄清回答 1：使用哪个报告期？'), '2026年中报');
+    await user.type(screen.getByLabelText('澄清回答 2：总市值最低门槛是多少？'), '至少1000亿元');
+    await user.click(screen.getByRole('button', { name: '提交补充说明' }));
+    await waitFor(() => expect(intentRequest).toHaveBeenCalledTimes(2));
+    expect(intentRequest).toHaveBeenNthCalledWith(2,
+      '帮我挑选银行股\n\n澄清回答：\n- 使用哪个报告期？：2026年中报\n- 总市值最低门槛是多少？：至少1000亿元', strategy);
+    await waitFor(() => expect(screen.getByRole('button', { name: '运行筛选' })).toBeEnabled());
+  });
+
+  it('surfaces storage failures as a visible, non-blocking saved-strategy warning', () => {
+    const storage = { list: () => [], save: vi.fn(), load: vi.fn(), delete: vi.fn(), warning: () => '本地保存暂不可用，已保存的策略无法读取。' };
+    render(<CopilotWorkspace storage={storage} />);
+    expect(screen.getByRole('status')).toHaveTextContent('本地保存暂不可用');
+    expect(screen.getByRole('textbox', { name: '请输入选股需求' })).toBeEnabled();
   });
 });

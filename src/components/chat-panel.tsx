@@ -6,10 +6,10 @@ import type { ChatMessage, Clarification } from '../hooks/use-copilot';
 type Props = {
   messages: ChatMessage[]; draft: string; busy: boolean; error: string | null; clarification: Clarification | null;
   busyText?: string;
-  onDraftChange(value: string): void; onSubmit(): void; onClarify(optionId: string): void;
+  onDraftChange(value: string): void; onSubmit(): void; onClarificationAnswer(index: number, answer: string): void; onSubmitClarification(): void;
 };
 
-export function ChatPanel({ messages, draft, busy, busyText = '正在整理你的筛选条件…', error, clarification, onDraftChange, onSubmit, onClarify }: Props) {
+export function ChatPanel({ messages, draft, busy, busyText = '正在整理你的筛选条件…', error, clarification, onDraftChange, onSubmit, onClarificationAnswer, onSubmitClarification }: Props) {
   const submit = (event: FormEvent) => { event.preventDefault(); onSubmit(); };
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (!busy) onSubmit(); }
@@ -21,7 +21,7 @@ export function ChatPanel({ messages, draft, busy, busyText = '正在整理你�
         <article className={`message message-${message.role} ${message.kind === 'error' ? 'message-error' : ''}`} key={message.id}><p>{message.text}</p></article>)}
       {busy && <p className="working-note" role="status">{busyText}</p>}
     </div>
-    {clarification && <div className="clarification" aria-label="需要澄清"><p>{clarification.prompt}</p><div className="choice-list">{clarification.options.map((option) => <button key={option.id} className="choice-button" onClick={() => onClarify(option.id)} disabled={busy}>{option.label}</button>)}</div></div>}
+    {clarification && <section className="clarification" aria-labelledby="clarification-heading"><h3 id="clarification-heading">请补充以下信息</h3><div className="clarification-prompts">{clarification.prompts.map((item, index) => <label className="clarification-field" key={item.id} htmlFor={item.id}><span>澄清回答 {index + 1}：{item.prompt}</span><input id={item.id} value={item.answer} onChange={(event) => onClarificationAnswer(index, event.target.value)} placeholder="输入你的条件" disabled={busy} /></label>)}</div><button className="secondary-button clarification-submit" type="button" onClick={onSubmitClarification} disabled={busy || clarification.prompts.some((item) => !item.answer.trim())}>提交补充说明</button></section>}
     {error && <p className="inline-error" role="alert">{error}</p>}
     <form className="composer" onSubmit={submit}>
       <label className="sr-only" htmlFor="intent-draft">请输入选股需求</label>

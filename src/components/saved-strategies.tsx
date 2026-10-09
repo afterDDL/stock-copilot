@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import type { SavedStrategySummary } from '../lib/storage/strategies';
 
-type Props = { entries: SavedStrategySummary[]; currentId?: string | null; canSave: boolean; onSave(name?: string, id?: string): SavedStrategySummary | null | void; onLoad(id: string): void; onDelete(id: string): void };
-export function SavedStrategies({ entries, currentId, canSave, onSave, onLoad, onDelete }: Props) {
+type Props = { entries: SavedStrategySummary[]; currentId?: string | null; canSave: boolean; warning?: string | null; onSave(name?: string, id?: string): SavedStrategySummary | null | void; onLoad(id: string): void; onDelete(id: string): void };
+export function SavedStrategies({ entries, currentId, canSave, warning = null, onSave, onLoad, onDelete }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [name, setName] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(currentId ?? null);
@@ -16,8 +16,10 @@ export function SavedStrategies({ entries, currentId, canSave, onSave, onLoad, o
     setName('');
   };
   return <div className="saved-strategies">
-    <button className="saved-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((open) => !open)}><span>已保存策略</span><span className="saved-count">{entries.length}</span><span aria-hidden="true">{expanded ? '⌃' : '⌄'}</span></button>
+    <button className="saved-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((open) => !open)}><span>已保存策略</span><span className="saved-count">{entries.length}</span>{warning && <span role="img" aria-label={warning} className="saved-warning-mark">!</span>}<span aria-hidden="true">{expanded ? '⌃' : '⌄'}</span></button>
+    {warning && <p className="saved-warning" role="status">{warning}</p>}
     {expanded && <div className="saved-menu">
+      {warning && <p className="saved-menu-warning">{warning}</p>}
       <label htmlFor="save-strategy-name">保存名称</label><input id="save-strategy-name" className="text-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="使用当前策略名称" />
       <button className="secondary-button save-action" type="button" disabled={!canSave} onClick={submit}>保存策略</button>
       {entries.length === 0 ? <p className="muted-copy saved-empty">还没有保存的策略。</p> : <ul>{entries.map((entry) => <li key={entry.id} className="saved-entry">

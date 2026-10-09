@@ -20,34 +20,51 @@ function defaultStorage(): Storage {
   return window.localStorage;
 }
 
-function read(storage: Pick<Storage, 'getItem'>): SavedStrategySummary[] {
+function read(storage: Pick<Storage, 'getItem'>): { entries: SavedStrategySummary[]; warning: string | null } {
   try {
     const raw = storage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
+    if (!raw) return { entries: [], warning: null };
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); }
+    catch { return { entries: [], warning: '已保存的策略格式无效，已忽略这些数据。' }; }
     const envelope = envelopeSchema.safeParse(parsed);
-    if (envelope.success) return envelope.data.entries;
+    if (envelope.success) return { entries: envelope.data.entries, warning: null };
     if (parsed && typeof parsed === 'object' && 'entries' in parsed && Array.isArray(parsed.entries)) {
-      if (!('schemaVersion' in parsed) || parsed.schemaVersion !== 1) return [];
-      return parsed.entries.map((entry) => entrySchema.safeParse(entry)).filter((entry) => entry.success).map((entry) => entry.data);
+      if (!('schemaVersion' in parsed) || parsed.schemaVersion !== 1) return { entries: [], warning: '已保存策略来自不支持的格式版本，已忽略这些数据。' };
+      const results = parsed.entries.map((entry) => entrySchema.safeParse(entry));
+      const entries = results.filter((entry) => entry.success).map((entry) => entry.data);
+      return { entries, warning: entries.length === results.length ? null : '部分已保存策略无效，已忽略无效项目。' };
     }
-    return [];
+    return { entries: [], warning: '已保存的策略格式无效，已忽略这些数据。' };
   } catch {
-    return [];
+    return { entries: [], warning: '本地保存暂不可用，已保存的策略无法读取。' };
   }
 }
 
 export function createStrategyStorage(storage?: Pick<Storage, 'getItem' | 'setItem'>) {
   const resolve = () => storage ?? defaultStorage();
+  let lastWarning: string | null = null;
+  const readEntries = (): SavedStrategySummary[] => {
+    const result = read(resolve());
+    lastWarning = result.warning;
+    return result.entries;
+  };
   return {
     list(): SavedStrategySummary[] {
-      return read(resolve());
+      try { return readEntries(); }
+      catch { lastWarning = '本地保存暂不可用，已保存的策略无法读取。'; return []; }
+    },
+    warning(): string | null {
+      if (!storage && typeof window === 'undefined') return null;
+      try { readEntries(); }
+      catch { lastWarning = '本地保存暂不可用，已保存的策略无法读取。'; }
+      return lastWarning;
     },
     save(strategy: Strategy, name = strategy.name, id?: string): SavedStrategySummary {
       if (!name.trim()) throw new Error('策略名称不能为空。');
       const parsedStrategy = strategySchema.parse({ ...strategy, name: name.trim() });
       const target = resolve();
-      const entries = read(target);
+      const entries = read(target).entries;
       const now = new Date().toISOString();
       const existing = id ? entries.find((entry) => entry.id === id) : undefined;
       const entry: SavedStrategySummary = {
@@ -60,11 +77,11 @@ export function createStrategyStorage(storage?: Pick<Storage, 'getItem' | 'setIt
       return entry;
     },
     load(id: string): Strategy | null {
-      return read(resolve()).find((entry) => entry.id === id)?.strategy ?? null;
+      return readEntries().find((entry) => entry.id === id)?.strategy ?? null;
     },
     delete(id: string): boolean {
       const target = resolve();
-      const entries = read(target);
+      const entries = read(target).entries;
       if (!entries.some((entry) => entry.id === id)) return false;
       target.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, entries: entries.filter((entry) => entry.id !== id) }));
       return true;

@@ -10,7 +10,7 @@ import { createStrategyStorage } from '../lib/storage/strategies';
 import type { StrategyStorage } from '../lib/storage/strategies';
 
 export type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; kind?: 'normal' | 'error' };
-export type Clarification = { id: string; prompt: string; options: Array<{ id: string; label: string }> };
+export type Clarification = { prompts: Array<{ id: string; prompt: string; answer: string }> };
 export type SnapshotEnvelope = {
   mode: 'live' | 'historical'; snapshot: DataSnapshot; coverage: DataSnapshot['coverage'];
   evidence: { source: string; capturedAt: string; statisticDates: Record<string, string | null>; liveRequests: unknown[] };
@@ -23,9 +23,10 @@ export type IntentEnvelope = {
 type Options = {
   intentRequest?: (query: string, currentStrategy?: Strategy) => Promise<IntentEnvelope | { intent: IntentEnvelope }>;
   snapshotRequest?: () => Promise<SnapshotEnvelope>;
-  storage?: Pick<StrategyStorage, 'list' | 'save' | 'load' | 'delete'>;
+  storage?: Pick<StrategyStorage, 'list' | 'save' | 'load' | 'delete'> & Partial<Pick<StrategyStorage, 'warning'>>;
 };
 type Tab = 'included' | 'excluded' | 'unknown';
+type IntentContext = { originalQuery: string; answers: Array<{ prompt: string; answer: string }> };
 
 async function requestIntent(query: string, currentStrategy?: Strategy): Promise<IntentEnvelope> {
   const response = await fetch('/api/intent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query, ...(currentStrategy ? { currentStrategy } : {}) }) });
@@ -60,6 +61,7 @@ export function useCopilot(options: Options = {}) {
   const [baselineResult, setBaselineResult] = useState<ScreeningResult | null>(null);
   const [baselineStrategy, setBaselineStrategy] = useState<Strategy | null>(null);
   const [clarification, setClarification] = useState<Clarification | null>(null);
+  const [pendingIntentContext, setPendingIntentContext] = useState<IntentContext | null>(null);
   const [canExecute, setCanExecute] = useState(true);
   const [unsupportedItems, setUnsupportedItems] = useState<IntentEnvelope['unsupportedRequests']>([]);
   const [activeTab, setActiveTab] = useState<Tab>('included');
@@ -75,65 +77,74 @@ export function useCopilot(options: Options = {}) {
   const setMessage = useCallback((text: string, role: ChatMessage['role'], kind: ChatMessage['kind'] = 'normal') => {
     setMessages((current) => [...current, { id: `${Date.now()}-${current.length}`, role, text, kind }]);
   }, []);
-  const submitIntent = useCallback(async (override?: string, answer?: string) => {
-    const query = (override ?? draft).trim();
+  const applyIntentResponse = useCallback((response: IntentEnvelope, context: IntentContext) => {
+    const safeStrategy = strategySchema.parse(response.strategy);
+    setStrategy(copyStrategy(safeStrategy));
+    setCanExecute(response.canExecute);
+    setUnsupportedItems(response.unsupportedRequests ?? []);
+    const prompts = response.clarifications.map((prompt, index) => ({ id: `clarification-${index + 1}`, prompt, answer: '' }));
+    setClarification(prompts.length ? { prompts } : null);
+    setPendingIntentContext(prompts.length ? context : null);
+    (response.assumptions ?? []).forEach((assumption) => setMessage(`已按此理解：${assumption}`, 'assistant'));
+    if (response.unsupportedRequests?.length) response.unsupportedRequests.forEach((item) => setMessage(`暂不支持「${item.request}」：${item.reason}`, 'assistant', 'error'));
+    if (prompts.length) {
+      response.clarifications.forEach((question) => setMessage(`需要确认：${question}`, 'assistant'));
+      setPhase('clarification_needed');
+    } else {
+      setMessage('策略已准备好，你可以检查并编辑条件。', 'assistant');
+      setPhase('strategy_ready');
+    }
+    setSnapshot(null); setSnapshotEnvelope(null); setResult(null); setBaselineResult(null); setSelectedCode(null); setCompareCodes([null, null]); setBaselineStrategy(null);
+  }, [setMessage]);
+  const submitIntent = useCallback(async () => {
+    const query = draft.trim();
     if (!query || busy) return;
     setBusy(true); setError(null); setPhase('intent_pending');
-    if (!override) setMessage(query, 'user');
+    setMessage(query, 'user');
     setDraft('');
+    setClarification(null); setPendingIntentContext(null);
     try {
       const response = normalizeIntent(await (options.intentRequest ?? requestIntent)(query, strategy ?? undefined));
-      const safeStrategy = strategySchema.parse(response.strategy);
-      setStrategy(copyStrategy(safeStrategy));
-      setCanExecute(response.canExecute);
-      setUnsupportedItems(response.unsupportedRequests ?? []);
-      setClarification(response.clarifications.length ? {
-        id: 'clarification-0', prompt: response.clarifications[0], options: [
-          { id: 'mid-2026', label: '按 2026 年中报' }, { id: 'annual-2025', label: '按 2025 年年报' }, { id: 'custom', label: '我再补充说明' },
-        ],
-      } : null);
-      (response.assumptions ?? []).forEach((assumption) => setMessage(`已按此理解：${assumption}`, 'assistant'));
-      if (response.unsupportedRequests?.length) response.unsupportedRequests.forEach((item) => setMessage(`暂不支持「${item.request}」：${item.reason}`, 'assistant', 'error'));
-      if (response.clarifications.length) {
-        response.clarifications.forEach((question) => setMessage(`需要确认：${question}`, 'assistant'));
-        setPhase('clarification_needed');
-      } else {
-        setMessage('策略已准备好，你可以检查并编辑条件。', 'assistant');
-        setPhase('strategy_ready');
-      }
-      setSnapshot(null); setSnapshotEnvelope(null); setResult(null); setBaselineResult(null); setSelectedCode(null); setCompareCodes([null, null]);
-      setBaselineStrategy(null);
+      applyIntentResponse(response, { originalQuery: query, answers: [] });
     } catch (cause) {
       const message = errorText(cause); setError(message); setMessage(message, 'assistant', 'error'); setPhase('recoverable_error'); setDraft(query);
     } finally { setBusy(false); }
-    return answer;
-  }, [busy, draft, options.intentRequest, setMessage, strategy]);
-  const answerClarification = useCallback((optionId: number | string, answer?: string) => {
-    const selected = clarification?.options.find((option) => option.id === String(optionId));
-    const text = answer ?? selected?.label ?? String(optionId);
-    if (!clarification) return;
-    setMessage(text, 'user'); setClarification(null); setCanExecute(false);
-    void submitIntent(`补充澄清：${clarification.prompt} ${text}`);
-  }, [clarification, setMessage, submitIntent]);
+  }, [applyIntentResponse, busy, draft, options.intentRequest, setMessage, strategy]);
+  const answerClarification = useCallback((promptIndex: number, answer: string) => {
+    setClarification((current) => current ? { prompts: current.prompts.map((item, index) => index === promptIndex ? { ...item, answer } : item) } : current);
+  }, []);
+  const submitClarification = useCallback(async () => {
+    if (!clarification || !pendingIntentContext || busy || clarification.prompts.some((item) => !item.answer.trim())) return;
+    const answers = [...pendingIntentContext.answers, ...clarification.prompts.map(({ prompt, answer }) => ({ prompt, answer: answer.trim() }))];
+    const query = `${pendingIntentContext.originalQuery}\n\n澄清回答：\n${answers.map(({ prompt, answer }) => `- ${prompt}：${answer}`).join('\n')}`;
+    setBusy(true); setError(null); setPhase('intent_pending');
+    setMessage(`补充说明：\n${clarification.prompts.map(({ prompt, answer }) => `- ${prompt}：${answer.trim()}`).join('\n')}`, 'user');
+    try {
+      const response = normalizeIntent(await (options.intentRequest ?? requestIntent)(query, strategy ?? undefined));
+      applyIntentResponse(response, { originalQuery: pendingIntentContext.originalQuery, answers });
+    } catch (cause) {
+      const message = errorText(cause); setError(message); setMessage(message, 'assistant', 'error'); setPhase('recoverable_error');
+    } finally { setBusy(false); }
+  }, [applyIntentResponse, busy, clarification, options.intentRequest, pendingIntentContext, setMessage, strategy]);
   const updateStrategy = useCallback((update: (current: Strategy) => Strategy) => {
     setStrategy((current) => current ? copyStrategy(update(current), current.version + 1) : current);
     setPhase('strategy_dirty');
   }, []);
   const updateCondition = useCallback((index: number, patch: Partial<Condition>) => updateStrategy((current) => ({ ...current, conditions: current.conditions.map((condition, i) => i === index ? { ...condition, ...patch } : condition) })), [updateStrategy]);
   const fixConflict = useCallback((conflict: StrategyConflict, fix: string) => updateStrategy((current) => {
-    const fields = current.conditions.map((condition, index) => ({ condition, index })).filter((item) => item.condition.field === conflict.field);
-    if (fix === 'remove_upper' || fix === 'remove_lower') {
-      const operators = fix === 'remove_upper' ? ['lt', 'lte'] : ['gt', 'gte'];
-      const target = fields.findLast((item) => operators.includes(item.condition.operator));
-      return { ...current, conditions: current.conditions.filter((_condition, index) => index !== target?.index) };
-    }
     if (conflict.kind === 'empty_range') {
-      const upper = fields.findLast((item) => item.condition.operator === 'lt' || item.condition.operator === 'lte');
-      if (upper && Number.isFinite(conflict.minimum)) return { ...current, conditions: current.conditions.map((condition, index) => index === upper.index ? { ...condition, operator: 'lte', value: conflict.minimum } : condition) };
+      const removeUpper = fix === 'remove_upper';
+      const targetValue = removeUpper ? conflict.maximum : conflict.minimum;
+      const targetOperators = removeUpper ? ['lt', 'lte'] : ['gt', 'gte'];
+      if (!Number.isFinite(targetValue)) return current;
+      return { ...current, conditions: current.conditions.filter((condition) => !(condition.field === conflict.field && targetOperators.includes(condition.operator) && condition.value === targetValue)) };
     }
-    if (conflict.kind === 'equality_outside_range' || conflict.kind === 'multiple_equalities') {
-      const equality = fields.findLast((item) => item.condition.operator === 'eq' && item.condition.field !== 'industry');
-      if (equality) return { ...current, conditions: current.conditions.filter((_condition, index) => index !== equality.index) };
+    if (conflict.kind === 'equality_outside_range') {
+      return { ...current, conditions: current.conditions.filter((condition) => !(condition.field === conflict.field && condition.operator === 'eq' && condition.value === conflict.value)) };
+    }
+    if (conflict.kind === 'multiple_equalities') {
+      const keep = conflict.field === 'industry' && conflict.values.includes('银行') ? '银行' : conflict.values[0];
+      return { ...current, conditions: current.conditions.filter((condition) => !(condition.field === conflict.field && condition.operator === 'eq' && conflict.values.includes(condition.value) && condition.value !== keep)) };
     }
     return current;
   }), [updateStrategy]);
@@ -196,12 +207,13 @@ export function useCopilot(options: Options = {}) {
     phase, messages, draft, strategy, snapshot, snapshotEnvelope, result, baselineResult, previousStrategy: baselineStrategy, previousResult: baselineResult,
     conflicts, clarification, unsupportedItems, activeTab, selectedCode, compareCodes, diff, busy, error,
     actions: {
-      setDraft, submitIntent, answerClarification, updateStrategy, updateCondition, updateConditionByField,
+      setDraft, submitIntent, answerClarification, submitClarification, updateStrategy, updateCondition, updateConditionByField,
       addCondition, removeCondition, fixConflict, runScreen, setActiveTab, selectStock: setSelectedCode,
       setCompareCode, saveStrategy, loadStrategy, deleteStrategy, resetError: () => setError(null),
       rebaseDiff: () => { if (result && strategy) { setBaselineResult(result); setBaselineStrategy(copyStrategy(strategy)); } },
       canRun, canSave: Boolean(strategy && strategy.name.trim() && conflicts.length === 0),
     },
     savedStrategies: (() => { try { return storage.list(); } catch { return []; } })(),
+    savedStrategyWarning: (() => { try { return storage.warning?.() ?? null; } catch { return '本地保存暂不可用，已保存的策略无法读取。'; } })(),
   };
 }

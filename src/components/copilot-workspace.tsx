@@ -14,7 +14,7 @@ import { SavedStrategies } from './saved-strategies';
 type Props = {
   intentRequest?: (query: string, currentStrategy?: Strategy) => Promise<IntentEnvelope | { intent: IntentEnvelope }>;
   snapshotRequest?: () => Promise<SnapshotEnvelope>;
-  storage?: Pick<StrategyStorage, 'list' | 'save' | 'load' | 'delete'>;
+  storage?: Pick<StrategyStorage, 'list' | 'save' | 'load' | 'delete'> & Partial<Pick<StrategyStorage, 'warning'>>;
 };
 const sections = [{ id: 'conversation', label: '对话' }, { id: 'strategy', label: '策略' }, { id: 'research', label: '结果' }];
 
@@ -63,13 +63,13 @@ export function CopilotWorkspace({ intentRequest, snapshotRequest, storage }: Pr
     state.actions.setCompareCode(slot, code);
   };
   return <div className="app-shell">
-    <header className="topbar"><a href="#top" className="brand-mark" aria-label="选股 coPilot 首页"><span className="brand-icon">◈</span><span>选股 <strong>coPilot</strong></span></a><div className="header-right"><span className="header-context">研究工作台</span><SavedStrategies entries={state.savedStrategies} canSave={state.actions.canSave} onSave={state.actions.saveStrategy} onLoad={state.actions.loadStrategy} onDelete={state.actions.deleteStrategy} /></div></header>
+    <header className="topbar"><a href="#top" className="brand-mark" aria-label="选股 coPilot 首页"><span className="brand-icon">◈</span><span>选股 <strong>coPilot</strong></span></a><div className="header-right"><span className="header-context">研究工作台</span><SavedStrategies entries={state.savedStrategies} canSave={state.actions.canSave} warning={state.savedStrategyWarning} onSave={state.actions.saveStrategy} onLoad={state.actions.loadStrategy} onDelete={state.actions.deleteStrategy} /></div></header>
     <main id="top" className="workspace-main">
       <div className="welcome-heading"><div><p className="eyebrow">选股 coPilot · 银行股研究</p><h1>把想法，变成可验证的筛选。</h1><p className="welcome-copy">用自然语言开始，再检查条件、数据和每只股票的入选依据。</p></div><span className="scope-note">仅支持银行、总市值与归母净利润同比</span></div>
       <nav className="mobile-sections" aria-label="工作区章节">{sections.map((section) => <a key={section.id} href={`#${section.id}`} aria-current={currentSection === section.id ? 'location' : undefined} onClick={() => setCurrentSection(section.id)}>{section.label}</a>)}</nav>
       <div className="workspace-grid">
         <div className="conversation-column">
-          <div id="conversation"><ChatPanel messages={state.messages} draft={state.draft} busy={state.busy} busyText={state.phase === 'data_loading' ? '正在获取数据快照…' : '正在整理你的筛选条件…'} error={state.error} clarification={state.clarification} onDraftChange={state.actions.setDraft} onSubmit={() => { void state.actions.submitIntent(); }} onClarify={(id) => state.actions.answerClarification(id)} /></div>
+          <div id="conversation"><ChatPanel messages={state.messages} draft={state.draft} busy={state.busy} busyText={state.phase === 'data_loading' ? '正在获取数据快照…' : '正在整理你的筛选条件…'} error={state.error} clarification={state.clarification} onDraftChange={state.actions.setDraft} onSubmit={() => { void state.actions.submitIntent(); }} onClarificationAnswer={state.actions.answerClarification} onSubmitClarification={() => { void state.actions.submitClarification(); }} /></div>
           <div id="strategy"><StrategyEditor strategy={state.strategy} disabled={state.busy} onRename={rename} onConditionChange={conditionChange} onConditionRemove={state.actions.removeCondition} onConditionAdd={state.actions.addCondition} onSortDirectionChange={sortDirection} onRun={() => { void state.actions.runScreen(); }} canRun={state.actions.canRun} /></div>
           <ConflictPanel conflicts={state.conflicts} strategy={state.strategy} onFix={(conflict, fix) => { state.actions.fixConflict(conflict, fix); requestAnimationFrame(() => {
             const label = conflict.field === 'market_cap_cny' ? '总市值门槛（元）' : conflict.field === 'net_profit_parent_yoy_pct' ? '归母净利润同比增长率门槛（%）' : '所属行业';

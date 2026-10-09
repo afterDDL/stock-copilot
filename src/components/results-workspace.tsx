@@ -42,21 +42,23 @@ export function ResultsWorkspace({ result, snapshot, snapshotEnvelope, activeTab
       </div> : <div className="results-empty-state"><div className="empty-illustration">⌕</div><h3>你的研究结果会出现在这里</h3><p>运行筛选后，可查看入选、排除和无法判定的股票与对应证据。</p></div>}
       {result && buckets && <>
         <div className="result-controls"><div className="result-tabs" role="tablist" aria-label="筛选结果类别" onKeyDown={(event) => {
-          if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
           event.preventDefault();
           const currentIndex = tabMeta.findIndex((tab) => tab.key === activeTab);
-          const nextIndex = (currentIndex + (event.key === 'ArrowRight' ? 1 : tabMeta.length - 1)) % tabMeta.length;
+          const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabMeta.length - 1 : (currentIndex + (event.key === 'ArrowRight' ? 1 : tabMeta.length - 1)) % tabMeta.length;
           onTabChange(tabMeta[nextIndex].key);
           event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex]?.focus();
-        }}>{tabMeta.map(({ key, label }) => <button role="tab" aria-selected={activeTab === key} className={`result-tab ${activeTab === key ? 'active' : ''}`} key={key} onClick={() => onTabChange(key)}>{label}<span>{buckets[key].length}</span></button>)}</div>
+        }}>{tabMeta.map(({ key, label }) => <button id={`results-tab-${key}`} role="tab" aria-selected={activeTab === key} aria-controls="results-panel" tabIndex={activeTab === key ? 0 : -1} className={`result-tab ${activeTab === key ? 'active' : ''}`} key={key} onClick={() => onTabChange(key)}>{label}<span>{buckets[key].length}</span></button>)}</div>
           <button className={`secondary-button compare-toggle ${compareOpen ? 'selected' : ''}`} type="button" aria-expanded={compareOpen} onClick={() => setCompareOpen((open) => !open)}>比较股票</button></div>
         <p className="sr-only" role="status">当前显示{tabMeta.find((tab) => tab.key === activeTab)?.label}：{items.length} 只股票。</p>
+        <div id="results-panel" role="tabpanel" aria-labelledby={`results-tab-${activeTab}`} tabIndex={0}>
         {items.length ? <div className="stock-list-wrap"><table className="stock-table"><caption className="sr-only">{tabMeta.find((tab) => tab.key === activeTab)?.label}股票列表</caption><thead><tr><th scope="col">股票</th><th scope="col">总市值</th><th scope="col">利润同比</th><th scope="col">状态</th><th scope="col"><span className="sr-only">操作</span></th></tr></thead><tbody>{items.map((item) => <tr key={item.stock.code}>
           <th scope="row"><button className="stock-name-button" onClick={() => onSelectStock(item.stock.code)}><span>{item.stock.name}</span><small>{item.stock.code}</small></button></th>
           <td data-label="总市值">{metric(item.stock, 'market_cap_cny')}</td><td data-label="利润同比">{metric(item.stock, 'net_profit_parent_yoy_pct')}</td>
           <td data-label="状态"><span className={`status status-${activeTab === 'included' ? 'passed' : activeTab === 'excluded' ? 'failed' : 'unknown'}`}>{activeTab === 'included' ? '入选' : activeTab === 'excluded' ? '排除' : '无法判定'}</span></td>
           <td><button className="text-button row-compare" onClick={() => { setCompareOpen(true); const next = comparingCodes[0] ? 1 : 0; onCompareSlotChange(next, item.stock.code); }}>{compareOpen && comparingCodes[0] && !comparingCodes[1] ? '加入 B' : '比较'}</button></td>
         </tr>)}</tbody></table></div> : <div className="empty-tab"><strong>{activeTab === 'included' ? '暂时没有入选股票' : activeTab === 'excluded' ? '没有股票被排除' : '没有无法判定的股票'}</strong><span>{activeTab === 'unknown' ? '数据缺失或指标日期不匹配时，股票会显示在这里。' : '可以调整筛选条件后重新运行。'}</span></div>}
+        </div>
       </>}
     </section>
     {compareOpen && snapshot && <StockCompare left={lookup(comparingCodes[0])} right={lookup(comparingCodes[1])} snapshot={snapshot} onChoose={onCompareSlotChange} onClose={() => { setCompareOpen(false); onCompareSlotChange(0, null); onCompareSlotChange(1, null); requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.compare-toggle')?.focus()); }} />}

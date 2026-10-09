@@ -61,18 +61,98 @@ describe('useCopilot', () => {
     expect(result.current.diff).toMatchObject({ added: [], retained: [], removed: ['600000'] });
   });
 
-  it('does not enable screening until a clarification has been answered', async () => {
+  it('keeps multiple clarifications tied to the original query and resubmits explicit answers with currentStrategy', async () => {
     const intentRequest = vi.fn()
-      .mockResolvedValueOnce({ strategy, assumptions: [], clarifications: ['你希望按哪一个报告期筛选？'], unsupportedRequests: [], canExecute: false })
+      .mockResolvedValueOnce({ strategy, assumptions: [], clarifications: ['使用哪个报告期？', '总市值最低门槛是多少？'], unsupportedRequests: [], canExecute: false })
       .mockResolvedValueOnce({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
     const { result } = renderHook(() => useCopilot({ intentRequest, snapshotRequest: vi.fn() }));
     act(() => result.current.actions.setDraft('筛银行股'));
     await act(async () => result.current.actions.submitIntent());
     expect(result.current.actions.canRun).toBe(false);
-    act(() => result.current.actions.answerClarification(0, '按2026年中报'));
-    await waitFor(() => expect(intentRequest).toHaveBeenCalledTimes(2));
+    expect(result.current.clarification?.prompts).toHaveLength(2);
+    act(() => result.current.actions.answerClarification(0, '2026年中报'));
+    expect(intentRequest).toHaveBeenCalledTimes(1);
+    act(() => result.current.actions.answerClarification(1, '至少1000亿元'));
+    await act(async () => result.current.actions.submitClarification());
+    expect(intentRequest).toHaveBeenNthCalledWith(2,
+      '筛银行股\n\n澄清回答：\n- 使用哪个报告期？：2026年中报\n- 总市值最低门槛是多少？：至少1000亿元', strategy);
     await waitFor(() => expect(result.current.actions.canRun).toBe(true));
     expect(result.current.clarification).toBeNull();
+    expect(result.current.messages[0]).toMatchObject({ role: 'user', text: '筛银行股' });
+  });
+
+  it('removes the strongest contradictory upper bound, even when bounds are reordered', async () => {
+    const conditions = [
+      strategy.conditions[0],
+      { ...strategy.conditions[1], operator: 'gte' as const, value: 120_000_000_000, sourceExpression: '弱下限' },
+      { ...strategy.conditions[1], operator: 'lte' as const, value: 90_000_000_000, sourceExpression: '冲突上限' },
+      { ...strategy.conditions[1], operator: 'gte' as const, value: 150_000_000_000, sourceExpression: '冲突下限' },
+      { ...strategy.conditions[1], operator: 'lte' as const, value: 200_000_000_000, sourceExpression: '弱上限' },
+    ];
+    const intentRequest = vi.fn().mockResolvedValue({ strategy: { ...strategy, conditions }, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
+    const { result } = renderHook(() => useCopilot({ intentRequest }));
+    act(() => result.current.actions.setDraft('筛银行股'));
+    await act(async () => result.current.actions.submitIntent());
+    const rangeConflict = result.current.conflicts.find((conflict) => conflict.kind === 'empty_range')!;
+    act(() => result.current.actions.fixConflict(rangeConflict, 'remove_upper'));
+    expect(result.current.strategy?.conditions.some((condition) => condition.sourceExpression === '冲突上限')).toBe(false);
+    expect(result.current.strategy?.conditions.some((condition) => condition.sourceExpression === '弱上限')).toBe(true);
+    expect(result.current.conflicts).toEqual([]);
+  });
+
+  it('removes the strongest contradictory lower bound rather than a weaker array-last bound', async () => {
+    const conditions = [
+      strategy.conditions[0],
+      { ...strategy.conditions[1], operator: 'lte' as const, value: 130_000_000_000, sourceExpression: '上限' },
+      { ...strategy.conditions[1], operator: 'gte' as const, value: 150_000_000_000, sourceExpression: '冲突下限' },
+      { ...strategy.conditions[1], operator: 'gte' as const, value: 120_000_000_000, sourceExpression: '弱下限' },
+    ];
+    const intentRequest = vi.fn().mockResolvedValue({ strategy: { ...strategy, conditions }, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
+    const { result } = renderHook(() => useCopilot({ intentRequest }));
+    act(() => result.current.actions.setDraft('筛银行股'));
+    await act(async () => result.current.actions.submitIntent());
+    const rangeConflict = result.current.conflicts.find((conflict) => conflict.kind === 'empty_range')!;
+    act(() => result.current.actions.fixConflict(rangeConflict, 'remove_lower'));
+    expect(result.current.strategy?.conditions.some((condition) => condition.sourceExpression === '冲突下限')).toBe(false);
+    expect(result.current.strategy?.conditions.some((condition) => condition.sourceExpression === '弱下限')).toBe(true);
+    expect(result.current.conflicts).toEqual([]);
+  });
+
+  it('removes the equality value reported outside the surviving range', async () => {
+    const conditions = [
+      strategy.conditions[0],
+      { ...strategy.conditions[1], operator: 'eq' as const, value: 10_000_000_000, sourceExpression: '超界相等' },
+      { ...strategy.conditions[1], operator: 'lte' as const, value: 30_000_000_000, sourceExpression: '合理上限' },
+      { ...strategy.conditions[1], operator: 'eq' as const, value: 20_000_000_000, sourceExpression: '合理相等' },
+      { ...strategy.conditions[1], operator: 'gte' as const, value: 15_000_000_000, sourceExpression: '合理下限' },
+    ];
+    const intentRequest = vi.fn().mockResolvedValue({ strategy: { ...strategy, conditions }, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
+    const { result } = renderHook(() => useCopilot({ intentRequest }));
+    act(() => result.current.actions.setDraft('筛银行股'));
+    await act(async () => result.current.actions.submitIntent());
+    const equalityConflict = result.current.conflicts.find((conflict) => conflict.kind === 'equality_outside_range')!;
+    expect(equalityConflict.value).toBe(10_000_000_000);
+    act(() => result.current.actions.fixConflict(equalityConflict, 'remove_equality'));
+    expect(result.current.strategy?.conditions.some((condition) => condition.sourceExpression === '超界相等')).toBe(false);
+    expect(result.current.strategy?.conditions.some((condition) => condition.sourceExpression === '合理相等')).toBe(true);
+    expect(result.current.conflicts).toEqual([]);
+  });
+
+  it('keeps the deterministic canonical equality and removes all other reported equalities', async () => {
+    const conditions = [
+      strategy.conditions[0],
+      { ...strategy.conditions[1], operator: 'eq' as const, value: 30_000_000_000, sourceExpression: '等于30' },
+      { ...strategy.conditions[1], operator: 'eq' as const, value: 10_000_000_000, sourceExpression: '等于10' },
+      { ...strategy.conditions[1], operator: 'eq' as const, value: 20_000_000_000, sourceExpression: '等于20' },
+    ];
+    const intentRequest = vi.fn().mockResolvedValue({ strategy: { ...strategy, conditions }, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
+    const { result } = renderHook(() => useCopilot({ intentRequest }));
+    act(() => result.current.actions.setDraft('筛银行股'));
+    await act(async () => result.current.actions.submitIntent());
+    const multipleConflict = result.current.conflicts.find((conflict) => conflict.kind === 'multiple_equalities')!;
+    act(() => result.current.actions.fixConflict(multipleConflict, 'remove_equality'));
+    expect(result.current.strategy?.conditions.filter((condition) => condition.field === 'market_cap_cny' && condition.operator === 'eq').map((condition) => condition.value)).toEqual([10_000_000_000]);
+    expect(result.current.conflicts).toEqual([]);
   });
 
   it('keeps the submitted draft available after a recoverable intent error', async () => {
