@@ -48,6 +48,21 @@ describe('screenUniverse', () => {
     expect(result.excluded).toHaveLength(0);
   });
 
+  it('matches bank-only strategies to iFinD bank subcategory paths without substring matching', () => {
+    const bankSubcategory = stock('600001', 150_000_000_000, 10);
+    bankSubcategory.industry = '银行-银行-城商行';
+    bankSubcategory.metrics.industry = metric('银行-银行-城商行', '行业', null);
+    const unrelatedIndustry = stock('600002', 150_000_000_000, 10);
+    unrelatedIndustry.industry = '非银行机构-银行服务';
+    unrelatedIndustry.metrics.industry = metric('非银行机构-银行服务', '行业', null);
+
+    const result = screenUniverse(snapshot([bankSubcategory, unrelatedIndustry]), strategy);
+
+    expect(result.included.map((item) => item.stock.code)).toEqual(['600001']);
+    expect(result.excluded.map((item) => item.stock.code)).toEqual(['600002']);
+    expect(result.excluded[0]?.evidence[0]?.status).toBe('failed');
+  });
+
   it('classifies a statistic-date mismatch as unknown unless another condition definitively fails', () => {
     const datedStrategy: Strategy = {
       ...strategy,

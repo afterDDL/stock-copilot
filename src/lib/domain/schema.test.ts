@@ -68,6 +68,10 @@ describe('strategy schemas', () => {
     expect(dataSnapshotSchema.safeParse(snapshot).success).toBe(true);
     expect(dataSnapshotSchema.safeParse({
       ...snapshot,
+      stocks: [{ ...snapshot.stocks[0], industry: '银行-银行-城商行' }],
+    }).success).toBe(false);
+    expect(dataSnapshotSchema.safeParse({
+      ...snapshot,
       coverage: { ...snapshot.coverage, expectedStocks: 42 },
     }).success).toBe(false);
     expect(dataSnapshotSchema.safeParse({

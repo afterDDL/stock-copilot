@@ -85,7 +85,15 @@ export const stockRecordSchema = z.object({
       }
     }
   }),
-}).strict();
+}).strict().superRefine((stock, context) => {
+  if (stock.metrics.industry.value !== null && stock.industry !== stock.metrics.industry.value) {
+    context.addIssue({
+      code: 'custom',
+      path: ['metrics', 'industry', 'value'],
+      message: 'Stock industry must match the industry metric value.',
+    });
+  }
+});
 
 const metricCoverageSchema = z.object({ available: z.number().int().nonnegative(), missing: z.number().int().nonnegative() }).strict();
 
