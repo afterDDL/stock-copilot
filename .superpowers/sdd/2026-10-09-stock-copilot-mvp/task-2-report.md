@@ -32,7 +32,7 @@
 
 - The MCP client reads credentials only from `IFIND_MCP_AUTH_TOKEN`; query responses are parsed through the content envelope and rejected on empty, malformed, truncated, miscolumned, duplicate, misaligned, or incomplete results. A single content-layer 429 retry is covered.
 - Default live endpoint behavior safely serves the validated historical snapshot with sanitized error details on acquisition failure. `mode=historical` bypasses live acquisition.
-- Concern: an early environment-variable name scan printed the local credential in tool output. It was not committed or written into repository files. The secret-pattern scan passed; rotating the credential is still prudent.
+- Concern: an early environment-variable name scan printed the local credential in tool output. It was not committed or written into repository files. The secret-pattern scan passed; no external credential changes were made.
 
 ## Review fix round
 
