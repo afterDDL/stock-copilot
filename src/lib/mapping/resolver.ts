@@ -90,7 +90,7 @@ function extractCapConditions(query: string): Condition[] {
   });
 }
 function extractProfitCondition(query: string): Condition | null {
-  const match = query.match(/(?:归母净利润(?:同比增长率|同比)?|净利润(?:同比增长率|同比)?|利润同比(?:增长率)?|利润增长|业绩增长)\s*(至少|不低于|大于等于|大于|超过|高于|不超过|至多|小于等于|小于|低于|>=|<=|≥|≤|>|<)\s*(\d+(?:\.\d+)?)\s*[%％]/);
+  const match = query.match(/(?:归母净利润(?:同比增长率|同比)?|净利润(?:同比增长率|同比)?|利润同比(?:增长率)?|利润增长|业绩增长)\s*(至少|不低于|大于等于|大于|超过|高于|不超过|至多|小于等于|小于|低于|门槛(?:设为|改为|调整为|定为)|设为|改为|调整为|定为|为|>=|<=|≥|≤|>|<)\s*(\d+(?:\.\d+)?)\s*[%％]/);
   if (!match) return null;
   const token = match[1] ?? '';
   const operator: ConditionOperator = ['大于', '超过', '高于', '>'].includes(token) ? 'gt'
@@ -199,7 +199,7 @@ export function resolveIntent(query: string, candidateStrategy: Strategy, option
   const profitCue = hasAny(normalized, [/归母净利润|净利润同比|利润同比|利润增长|业绩增长|利润条件/]);
   if (!current && !profitCue) removeField('net_profit_parent_yoy_pct');
   const profitDelete = /不看利润|删除利润|移除利润|利润条件删掉|利润条件删除|删掉利润/.test(normalized);
-  const profitPreference = /(?:利润|业绩|净利润|归母净利润).{0,8}(?:快|高).{0,8}(?:优先|排前|排序|越好)|增长越快越好|利润增速优先/.test(normalized);
+  const profitPreference = /(?:利润|业绩|净利润|归母净利润).{0,8}(?:快|高).{0,8}(?:优先|排前|排序|越好)|(?:利润|业绩|净利润|归母净利润).{0,8}(?:降序|从高到低)(?:排序|排列)?|增长越快越好|利润增速优先/.test(normalized);
   const explicitStillGrowing = /还在增长|仍在增长|依然增长|正增长|利润增长为正/.test(normalized);
   const plainGrowthRequest = /业绩增长/.test(normalized) && !/(?:业绩|利润|净利润).{0,8}(?:快|高|优先|排前|排序|越好)/.test(normalized);
   const profitStillGrowing = explicitStillGrowing || plainGrowthRequest;

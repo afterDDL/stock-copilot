@@ -69,7 +69,7 @@ export function ResultsWorkspace({ result, previousResult, snapshot, snapshotEnv
             <p>样本中总市值达到 {largeCny(universeStatistics.threshold)} 或以上的有 {universeStatistics.atOrAboveThreshold}/{universeStatistics.sampleCount} 只；同业前30%相对门槛约 {largeCny(universeStatistics.top30ThresholdCny)}。</p>
             {insights.limitingCondition && <p>当前限制最多的条件：{insights.limitingCondition.label}（{insights.limitingCondition.excludedCount} 只被排除）。</p>}
             {!!insights.boundaryStocks.length && <p>接近市值门槛：{insights.boundaryStocks.slice(0, 4).map((stock) => stock.name + '（相差' + largeCny(stock.distanceCny) + '）').join('、')}。</p>}
-            {!!insights.removedAfterTightening.length && <p>本次收紧后剔除 {insights.removedAfterTightening.length} 只，其中仍满足正利润同比偏好的 {insights.removedButStillPositiveProfitGrowth.length} 只。</p>}
+            {!!insights.removedAfterTightening.length && <p>本次收紧后剔除 {insights.removedAfterTightening.length} 只，其中利润同比仍为正的 {insights.removedButStillPositiveProfitGrowth.length} 只。</p>}
             {!!insights.compareSuggestions.length && <p>可比较：{insights.compareSuggestions.slice(0, 2).map((item) => {
               const left = snapshot.stocks.find((stock) => stock.code === item.leftCode)?.name ?? item.leftCode;
               const right = snapshot.stocks.find((stock) => stock.code === item.rightCode)?.name ?? item.rightCode;

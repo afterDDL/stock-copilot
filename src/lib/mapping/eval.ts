@@ -53,45 +53,51 @@ function actionOf(result: ReturnType<typeof resolveIntent>): IntentEvalCase['exp
 function directionMatches(caseItem: IntentEvalCase, strategy: Strategy): boolean {
   const expected = caseItem.expected.direction;
   if (!expected) return true;
-  if (expected === 'desc') return strategy.sort.direction === 'desc' && strategy.sort.field === (caseItem.id === 'core-16' ? 'market_cap_cny' : 'net_profit_parent_yoy_pct');
-  const field: Indicator = caseItem.id === 'core-07' ? 'net_profit_parent_yoy_pct' : 'market_cap_cny';
+  const field: Indicator = /company_size|market_cap_cny/.test(caseItem.expected.conditionPreference) ? 'market_cap_cny' : 'net_profit_parent_yoy_pct';
+  if (expected === 'desc') return strategy.sort.direction === 'desc' && strategy.sort.field === field;
   return strategy.conditions.some((condition) => condition.field === field && condition.operator === expected);
 }
 function conditionPreferenceMatches(caseItem: IntentEvalCase, result: ReturnType<typeof resolveIntent>): boolean {
   const conditions = result.strategy.conditions;
   const capConditions = conditions.filter((condition) => condition.field === 'market_cap_cny');
   const profitConditions = conditions.filter((condition) => condition.field === 'net_profit_parent_yoy_pct');
-  switch (caseItem.id) {
-    case 'core-01': return capConditions.some((condition) => condition.operator === 'gte' && condition.value === 100_000_000_000 && condition.aiInferred);
-    case 'core-02': return capConditions.some((condition) => condition.operator === 'gte' && condition.value === 200_000_000_000);
-    case 'core-03': return capConditions.length === 0 && result.clarifications.length > 0;
-    case 'core-04': return capConditions.some((condition) => condition.operator === 'lte' && condition.value === 200_000_000_000);
-    case 'core-05': return capConditions.some((condition) => condition.operator === 'gte' && condition.value === 100_000_000_000) && capConditions.some((condition) => condition.operator === 'lte' && condition.value === 200_000_000_000);
-    case 'core-06': return profitConditions.length === 0 && result.strategy.sort.direction === 'desc';
-    case 'core-07': return profitConditions.some((condition) => condition.operator === 'gt' && condition.value === 0);
-    case 'core-08': case 'core-10': case 'core-12': case 'core-19': return result.clarifications.length > 0;
-    case 'core-09': case 'core-11': case 'core-13': case 'core-20': return result.unsupportedRequests.length > 0;
-    case 'core-14': return capConditions.some((condition) => condition.operator === 'gte' && condition.value === 200_000_000_000);
-    case 'core-15': return profitConditions.length === 0;
-    case 'core-16': return result.strategy.sort.field === 'market_cap_cny' && result.strategy.sort.direction === 'desc' && capConditions.length === 0;
-    case 'core-17': return true;
-    case 'core-18': return capConditions.some((condition) => condition.operator === 'gt' && condition.value === 200_000_000_000) && capConditions.some((condition) => condition.operator === 'lt' && condition.value === 100_000_000_000);
-    default: return false;
+  const expected = caseItem.expected.conditionPreference;
+  if (expected === 'hard company_size market_cap_cny between 100000000000 and 200000000000 CNY') {
+    return capConditions.some((condition) => condition.operator === 'gte' && condition.value === 100_000_000_000)
+      && capConditions.some((condition) => condition.operator === 'lte' && condition.value === 200_000_000_000);
   }
+  if (expected === 'soft preference profit_growth desc') {
+    return profitConditions.length === 0 && result.strategy.sort.field === 'net_profit_parent_yoy_pct' && result.strategy.sort.direction === 'desc';
+  }
+  if (expected === 'soft preference company_size desc') {
+    return capConditions.length === 0 && result.strategy.sort.field === 'market_cap_cny' && result.strategy.sort.direction === 'desc';
+  }
+  if (expected === 'remove profit condition') return profitConditions.length === 0;
+  if (expected === 'restore previous strategy') return result.mappings.some((mapping) => mapping.action === 'restore');
+  if (expected === 'conflicting market cap range') {
+    return detectConflicts(result.strategy).some((conflict) => conflict.kind === 'empty_range' && conflict.field === 'market_cap_cny');
+  }
+  if (expected.includes('clarif')) return result.clarifications.length > 0;
+  if (expected.includes('unavailable') || expected.includes('unsupported')) return result.unsupportedRequests.length > 0;
+
+  const capMatch = expected.match(/market_cap_cny\s*(>=|<=|>|<)\s*(\d+)/);
+  if (capMatch) {
+    const operators = { '>=': 'gte', '<=': 'lte', '>': 'gt', '<': 'lt' } as const;
+    const operator = operators[capMatch[1] as keyof typeof operators];
+    const value = Number(capMatch[2]);
+    return capConditions.some((condition) => condition.operator === operator && condition.value === value
+      && (!expected.startsWith('assumed ') || condition.aiInferred));
+  }
+  const profitMatch = expected.match(/net_profit_parent_yoy_pct\s*(>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)/);
+  if (profitMatch) {
+    const operators = { '>=': 'gte', '<=': 'lte', '>': 'gt', '<': 'lt' } as const;
+    return profitConditions.some((condition) => condition.operator === operators[profitMatch[1] as keyof typeof operators] && condition.value === Number(profitMatch[2]));
+  }
+  return false;
 }
 function conflictPatchMatches(caseItem: IntentEvalCase, result: ReturnType<typeof resolveIntent>): boolean {
-  const conflicts = detectConflicts(result.strategy);
-  if (caseItem.id === 'core-14') {
-    return result.mappings.some((mapping) => mapping.action === 'patch')
-      && result.strategy.conditions.some((condition) => condition.field === 'market_cap_cny' && condition.operator === 'gte' && condition.value === 200_000_000_000);
-  }
-  if (caseItem.id === 'core-15') {
-    return result.mappings.some((mapping) => mapping.action === 'patch')
-      && !result.strategy.conditions.some((condition) => condition.field === 'net_profit_parent_yoy_pct');
-  }
-  if (caseItem.id === 'core-17') return result.mappings.some((mapping) => mapping.action === 'restore');
-  if (caseItem.id === 'core-18') return conflicts.some((conflict) => conflict.kind === 'empty_range' && conflict.field === 'market_cap_cny');
-  return conflicts.length === 0 && !result.mappings.some((mapping) => mapping.action === 'patch' || mapping.action === 'restore');
+  const actual = result.mappings.some((mapping) => mapping.action === 'patch' || mapping.action === 'restore');
+  return actual === caseItem.expected.conflictPatch;
 }
 
 export function evaluateIntentCorpus(cases: IntentEvalCase[] = intentEvalCorpus) {

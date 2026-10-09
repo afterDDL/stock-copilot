@@ -76,6 +76,8 @@ describe('CopilotWorkspace', () => {
     await user.type(screen.getByRole('spinbutton', { name: '总市值门槛（元）' }), '200000000000');
     await user.click(screen.getByRole('button', { name: '运行筛选' }));
     expect(await screen.findByRole('region', { name: '筛选变化' })).toHaveTextContent('剔除');
+    expect(screen.getByRole('region', { name: '研究辅助' })).toHaveTextContent('利润同比仍为正');
+    expect(screen.getByRole('region', { name: '研究辅助' })).not.toHaveTextContent('正利润同比偏好');
     await user.click(screen.getByRole('button', { name: '比较股票' }));
     expect(await screen.findByRole('region', { name: '股票比较' })).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: /排除/ }));

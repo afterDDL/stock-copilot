@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveIntent } from './resolver';
 import { executableMetrics } from './registry';
-import { evaluateIntentCorpus } from './eval';
+import { evaluateIntentCorpus, intentEvalCorpus } from './eval';
 import type { Strategy } from '../domain/types';
 
 const strategy: Strategy = {
@@ -46,6 +46,28 @@ describe('financial mapping resolver', () => {
       expect.objectContaining({ field: 'net_profit_parent_yoy_pct', operator: 'gt', value: 0 }),
     ]));
     expect(paired.strategy.sort).toEqual({ field: 'net_profit_parent_yoy_pct', direction: 'desc' });
+  });
+
+  it('applies a verified multi-round profit threshold expressed as setting a threshold', () => {
+    const candidate = {
+      ...strategy,
+      version: strategy.version + 1,
+      conditions: strategy.conditions.map((item) => item.field === 'net_profit_parent_yoy_pct'
+        ? { ...item, operator: 'gte' as const, value: 10, sourceExpression: '归母净利润同比门槛设为10%' }
+        : item),
+    };
+    const resolved = resolveIntent('把归母净利润同比门槛设为10%', candidate, { currentStrategy: strategy });
+    expect(resolved.strategy.conditions.find((item) => item.field === 'net_profit_parent_yoy_pct')).toMatchObject({ operator: 'gte', value: 10 });
+    expect(resolved.mappings).toEqual(expect.arrayContaining([expect.objectContaining({ concept: 'profit_growth', action: 'patch' })]));
+    expect(resolved.canExecute).toBe(true);
+  });
+
+  it('applies a market-cap patch and an explicit profit descending sort in the same turn', () => {
+    const current = { ...strategy, sort: { field: 'market_cap_cny' as const, direction: 'desc' as const } };
+    const resolved = resolveIntent('总市值2000亿元以上，利润增长降序排序', current, { currentStrategy: current });
+    expect(resolved.strategy.conditions.find((item) => item.field === 'market_cap_cny')).toMatchObject({ operator: 'gte', value: 200_000_000_000 });
+    expect(resolved.strategy.sort).toEqual({ field: 'net_profit_parent_yoy_pct', direction: 'desc' });
+    expect(resolved.canExecute).toBe(true);
   });
 
   it('consumes the complete supported bank request without flagging filler or treating growth speed as a threshold', () => {
@@ -123,10 +145,30 @@ describe('financial mapping resolver', () => {
   it('exposes the 20 manually specified core cases as separate semantic evaluation dimensions', () => {
     const report = evaluateIntentCorpus();
     expect(report.total).toBe(20);
+    expect(report.cases.filter((item) => !item.passed)).toEqual([]);
     expect(report.passed).toBe(20);
     expect(report.cases).toHaveLength(20);
     expect(report.cases[0]).toMatchObject({
       id: 'core-01', checks: expect.objectContaining({ concept: true, conditionPreference: true, direction: true, mapping: true, action: true, conflictPatch: true }),
     });
+  });
+
+  it('fails an eval when the corpus expectation changes instead of keying only on its case id', () => {
+    const baseline = evaluateIntentCorpus().cases.find((item) => item.id === 'core-01');
+    expect(baseline?.passed).toBe(true);
+    const sourceCase = intentEvalCorpus.find((item) => item.id === 'core-01');
+    expect(sourceCase).toBeDefined();
+    const mutated = {
+      ...sourceCase!,
+      expected: {
+        ...sourceCase!.expected,
+        conditionPreference: 'hard company_size via market_cap_cny >= 200000000000 CNY',
+        conflictPatch: true,
+      },
+    };
+    const report = evaluateIntentCorpus([mutated]);
+    expect(report.passed).toBe(0);
+    expect(report.cases[0]?.checks.conditionPreference).toBe(false);
+    expect(report.cases[0]?.checks.conflictPatch).toBe(false);
   });
 });

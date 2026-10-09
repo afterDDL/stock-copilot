@@ -179,6 +179,9 @@ test('asks for clarification before making an ambiguous stability request execut
 });
 
 test('compares two stocks and saves then restores an edited strategy', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
   await submitIntent(page, '找盘子大的银行股，利润增长快的优先');
   await runScreen(page);
 
@@ -199,9 +202,14 @@ test('compares two stocks and saves then restores an edited strategy', async ({ 
   await marketCap.fill('300000000000');
   await marketCap.press('Tab');
   await expect(marketCap).toHaveValue('300000000000');
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: /已保存策略/ })).toContainText('1');
+  await page.getByRole('button', { name: /已保存策略/ }).click();
   await savedStrategy.click();
   await expect(marketCap).toHaveValue('100000000000');
   await expect(page.getByText('已载入策略，请运行筛选以获取当前数据。')).toBeVisible();
+  expect(pageErrors).not.toEqual(expect.arrayContaining([expect.stringContaining('Hydration failed')]));
 });
 
 test('keeps unsupported valuation and return prediction requests visible and non-executable', async ({ page }) => {

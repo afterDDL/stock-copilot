@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { dataSnapshotSchema, strategySchema } from '../lib/domain/schema';
 import type { Condition, DataSnapshot, ScreeningDiff, ScreeningResult, Strategy, StrategyConflict } from '../lib/domain/types';
 import { detectConflicts } from '../lib/engine/conflicts';
@@ -8,7 +8,7 @@ import { diffResults } from '../lib/engine/diff';
 import { screenUniverse } from '../lib/engine/screen';
 import { createStrategyStorage } from '../lib/storage/strategies';
 import type { ConditionMapping } from '../lib/mapping/resolver';
-import type { StrategyStorage } from '../lib/storage/strategies';
+import type { SavedStrategySummary, StrategyStorage } from '../lib/storage/strategies';
 
 export type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; kind?: 'normal' | 'error' };
 export type Clarification = { prompts: Array<{ id: string; prompt: string; answer: string }> };
@@ -53,6 +53,8 @@ function copyStrategy(strategy: Strategy, version = strategy.version): Strategy 
 
 export function useCopilot(options: Options = {}) {
   const storage = useMemo(() => options.storage ?? createStrategyStorage(), [options.storage]);
+  const [savedStrategies, setSavedStrategies] = useState<SavedStrategySummary[]>([]);
+  const [savedStrategyWarning, setSavedStrategyWarning] = useState<string | null>(null);
   const [phase, setPhase] = useState<'empty' | 'intent_pending' | 'clarification_needed' | 'strategy_ready' | 'strategy_dirty' | 'conflict_blocked' | 'data_loading' | 'results_ready' | 'recoverable_error'>('empty');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -73,6 +75,16 @@ export function useCopilot(options: Options = {}) {
   const [compareCodes, setCompareCodes] = useState<[string | null, string | null]>([null, null]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const refreshSavedStrategies = useCallback(() => {
+    try {
+      setSavedStrategies(storage.list());
+      setSavedStrategyWarning(storage.warning?.() ?? null);
+    } catch {
+      setSavedStrategies([]);
+      setSavedStrategyWarning('本地保存暂不可用，已保存的策略无法读取。');
+    }
+  }, [storage]);
+  useEffect(() => { refreshSavedStrategies(); }, [refreshSavedStrategies]);
   const conflicts = useMemo(() => strategy ? detectConflicts(strategy) : [], [strategy]);
   const diff: ScreeningDiff | null = useMemo(() => baselineResult && result && result !== baselineResult && baselineResult.snapshotId === result.snapshotId ? diffResults(baselineResult, result) : null, [baselineResult, result]);
   const isStrategyValid = strategy ? strategySchema.safeParse(strategy).success : false;
@@ -195,13 +207,13 @@ export function useCopilot(options: Options = {}) {
   }, [setMessage, storage, strategy?.version]);
   const saveStrategy = useCallback((name?: string, id?: string) => {
     if (!strategy) return null;
-    try { const saved = storage.save(strategy, name?.trim() || strategy.name, id); setMessage(`已保存策略「${saved.name}」。`, 'assistant'); setError(null); return saved; }
+    try { const saved = storage.save(strategy, name?.trim() || strategy.name, id); refreshSavedStrategies(); setMessage(`已保存策略「${saved.name}」。`, 'assistant'); setError(null); return saved; }
     catch (cause) { setError(errorText(cause)); return null; }
-  }, [setMessage, storage, strategy]);
+  }, [refreshSavedStrategies, setMessage, storage, strategy]);
   const deleteStrategy = useCallback((id: string) => {
-    try { storage.delete(id); setMessage('已删除保存的策略。', 'assistant'); setError(null); }
+    try { storage.delete(id); refreshSavedStrategies(); setMessage('已删除保存的策略。', 'assistant'); setError(null); }
     catch (cause) { setError(errorText(cause)); }
-  }, [setMessage, storage]);
+  }, [refreshSavedStrategies, setMessage, storage]);
   const updateConditionByField = useCallback((field: Condition['field'], patch: Partial<Condition>) => {
     const index = strategy?.conditions.findIndex((condition) => condition.field === field) ?? -1;
     if (index >= 0) updateCondition(index, patch);
@@ -225,7 +237,7 @@ export function useCopilot(options: Options = {}) {
       rebaseDiff: () => { if (result && strategy) { setBaselineResult(result); setBaselineStrategy(copyStrategy(strategy)); } },
       canRun, canSave: Boolean(strategy && strategy.name.trim() && conflicts.length === 0),
     },
-    savedStrategies: (() => { try { return storage.list(); } catch { return []; } })(),
-    savedStrategyWarning: (() => { try { return storage.warning?.() ?? null; } catch { return '本地保存暂不可用，已保存的策略无法读取。'; } })(),
+    savedStrategies,
+    savedStrategyWarning,
   };
 }
