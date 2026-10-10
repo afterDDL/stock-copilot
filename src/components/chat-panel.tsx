@@ -15,9 +15,9 @@ export function ChatPanel({ messages, draft, busy, busyText = '正在整理你�
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (!busy) onSubmit(); }
   };
   return <section className="card chat-panel" aria-labelledby="chat-heading">
-    <div className="section-heading"><div><p className="eyebrow">从一句话开始</p><h2 id="chat-heading">选股对话</h2></div><span className="quiet-pill">银行股 · P0</span></div>
+    <div className="section-heading"><div><p className="eyebrow">从一句话开始</p><h2 id="chat-heading">选股对话</h2></div><span className="quiet-pill">沪深北 A 股</span></div>
     <div className="conversation" aria-live="polite" aria-relevant="additions text">
-      {messages.length === 0 ? <div className="conversation-empty"><div className="sparkle">✳</div><p>描述你想找的银行股</p><span>例如：找市值在 1000 亿元以上、利润正增长的银行。</span></div> : messages.map((message) =>
+      {messages.length === 0 ? <div className="conversation-empty"><div className="sparkle">✳</div><p>描述你想找的股票</p><span>找市值较大、利润仍在增长的股票，增长更快的优先。</span></div> : messages.map((message) =>
         <article className={`message message-${message.role} ${message.kind === 'error' ? 'message-error' : ''}`} key={message.id}><p>{message.text}</p></article>)}
       {busy && <p className="working-note" role="status">{busyText}</p>}
     </div>

@@ -14,7 +14,7 @@ export type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string
 export type Clarification = { prompts: Array<{ id: string; prompt: string; answer: string }> };
 export type SnapshotEnvelope = {
   mode: 'live' | 'historical'; snapshot: DataSnapshot; coverage: DataSnapshot['coverage'];
-  evidence: { source: string; capturedAt: string; statisticDates: Record<string, string | null>; liveRequests: unknown[] };
+  evidence: { source: string; capturedAt: string; statisticDates: Record<string, string | null>; liveRequests: number | unknown[] };
   error?: string;
 };
 export type IntentEnvelope = {
@@ -24,7 +24,7 @@ export type IntentEnvelope = {
 };
 type Options = {
   intentRequest?: (query: string, currentStrategy?: Strategy, previousStrategy?: Strategy) => Promise<IntentEnvelope | { intent: IntentEnvelope }>;
-  snapshotRequest?: () => Promise<SnapshotEnvelope>;
+  stockSearchRequest?: (strategy: Strategy) => Promise<SnapshotEnvelope>;
   storage?: Pick<StrategyStorage, 'list' | 'save' | 'load' | 'delete'> & Partial<Pick<StrategyStorage, 'warning'>>;
 };
 type Tab = 'included' | 'excluded' | 'unknown';
@@ -36,12 +36,23 @@ async function requestIntent(query: string, currentStrategy?: Strategy, previous
   if (!response.ok) throw new Error(body?.error?.message ?? '意图解析失败，请重试。');
   return body.intent as IntentEnvelope;
 }
-async function requestSnapshot(): Promise<SnapshotEnvelope> {
-  const response = await fetch('/api/bank-snapshot');
-  const body = await response.json();
-  if (!response.ok) throw new Error(body?.error?.message ?? '暂时无法获取银行股数据，请重试。');
-  const snapshot = dataSnapshotSchema.parse(body.snapshot);
-  return { ...body, snapshot } as SnapshotEnvelope;
+async function requestStockSearch(strategy: Strategy): Promise<SnapshotEnvelope> {
+  try {
+    const response = await fetch('/api/stock-search', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ strategy }) });
+    const body = await response.json();
+    if (!response.ok) {
+      const message = body?.error?.code === 'needs_narrowing'
+        ? '结果较多，请补充行业或提高筛选门槛。'
+        : '数据暂时不可用，请稍后重试。';
+      throw new Error(message);
+    }
+    const snapshot = dataSnapshotSchema.parse(body.snapshot);
+    return { ...body, snapshot } as SnapshotEnvelope;
+  } catch (cause) {
+    const message = errorText(cause);
+    if (message === '结果较多，请补充行业或提高筛选门槛。') throw cause;
+    throw new Error('数据暂时不可用，请稍后重试。');
+  }
 }
 function normalizeIntent(value: IntentEnvelope | { intent: IntentEnvelope }): IntentEnvelope {
   return 'intent' in value ? value.intent : value;
@@ -86,7 +97,7 @@ export function useCopilot(options: Options = {}) {
   }, [storage]);
   useEffect(() => { refreshSavedStrategies(); }, [refreshSavedStrategies]);
   const conflicts = useMemo(() => strategy ? detectConflicts(strategy) : [], [strategy]);
-  const diff: ScreeningDiff | null = useMemo(() => baselineResult && result && result !== baselineResult && baselineResult.snapshotId === result.snapshotId ? diffResults(baselineResult, result) : null, [baselineResult, result]);
+  const diff: ScreeningDiff | null = useMemo(() => baselineResult && result && result !== baselineResult ? diffResults(baselineResult, result) : null, [baselineResult, result]);
   const isStrategyValid = strategy ? strategySchema.safeParse(strategy).success : false;
   const canRun = Boolean(isStrategyValid && strategy && canExecute && !clarification && unsupportedItems.length === 0 && conflicts.length === 0 && !busy);
 
@@ -104,7 +115,6 @@ export function useCopilot(options: Options = {}) {
     setClarification(prompts.length ? { prompts } : null);
     setPendingIntentContext(prompts.length ? context : null);
     (response.assumptions ?? []).forEach((assumption) => setMessage(`已按此理解：${assumption}`, 'assistant'));
-    if (response.unsupportedRequests?.length) response.unsupportedRequests.forEach((item) => setMessage(`暂不支持「${item.request}」：${item.reason}`, 'assistant', 'error'));
     if (prompts.length) {
       response.clarifications.forEach((question) => setMessage(`需要确认：${question}`, 'assistant'));
       setPhase('clarification_needed');
@@ -167,7 +177,7 @@ export function useCopilot(options: Options = {}) {
       return { ...current, conditions: current.conditions.filter((condition) => !(condition.field === conflict.field && condition.operator === 'eq' && condition.value === conflict.value)) };
     }
     if (conflict.kind === 'multiple_equalities') {
-      const keep = conflict.field === 'industry' && conflict.values.includes('银行') ? '银行' : conflict.values[0];
+      const keep = conflict.values[0];
       return { ...current, conditions: current.conditions.filter((condition) => !(condition.field === conflict.field && condition.operator === 'eq' && conflict.values.includes(condition.value) && condition.value !== keep)) };
     }
     return current;
@@ -176,16 +186,12 @@ export function useCopilot(options: Options = {}) {
     if (!strategy || !canRun) return;
     setBusy(true); setError(null); setPhase('data_loading');
     try {
-      let activeSnapshot = snapshot;
-      let envelope = snapshotEnvelope;
-      if (!activeSnapshot) {
-        envelope = await (options.snapshotRequest ?? requestSnapshot)();
-        activeSnapshot = dataSnapshotSchema.parse(envelope.snapshot);
-        setSnapshot(activeSnapshot); setSnapshotEnvelope(envelope);
-      }
+      const envelope = await (options.stockSearchRequest ?? requestStockSearch)(strategy);
+      const activeSnapshot = dataSnapshotSchema.parse(envelope.snapshot);
       const next = screenUniverse(activeSnapshot, strategy);
+      setSnapshot(activeSnapshot); setSnapshotEnvelope(envelope);
       setResult(next);
-      if (!baselineResult || baselineResult.snapshotId !== next.snapshotId) {
+      if (!baselineResult) {
         setBaselineResult(next);
         setBaselineStrategy(copyStrategy(strategy));
       }
@@ -193,7 +199,7 @@ export function useCopilot(options: Options = {}) {
     } catch (cause) {
       const message = errorText(cause); setError(message); setMessage(message, 'assistant', 'error'); setPhase('recoverable_error');
     } finally { setBusy(false); }
-  }, [baselineResult, canRun, options.snapshotRequest, setMessage, snapshot, snapshotEnvelope, strategy]);
+  }, [baselineResult, canRun, options.stockSearchRequest, setMessage, strategy]);
   const setCompareCode = useCallback((slot: 0 | 1, code: string | null) => setCompareCodes((current) => {
     if (code && current[1 - slot] === code) return current;
     const next: [string | null, string | null] = [...current]; next[slot] = code; return next;
@@ -221,7 +227,7 @@ export function useCopilot(options: Options = {}) {
   const addCondition = useCallback((field: Condition['field']) => updateStrategy((current) => {
     if (current.conditions.some((condition) => condition.field === field)) return current;
     const newCondition: Condition = field === 'industry'
-      ? { field, operator: 'eq', value: '银行', unit: '行业', statisticDate: null, sourceExpression: '所属行业', aiInferred: false, editable: false }
+      ? { field, operator: 'eq', value: '', unit: '行业', statisticDate: null, sourceExpression: '所属行业', aiInferred: false, editable: true }
       : { field, operator: 'gte', value: 0, unit: field === 'market_cap_cny' ? '元' : '%', statisticDate: field === 'market_cap_cny' ? '2026-10-09' : '2026-06-30', sourceExpression: '手动添加', aiInferred: false, editable: true };
     return { ...current, conditions: [...current.conditions, newCondition] };
   }), [updateStrategy]);

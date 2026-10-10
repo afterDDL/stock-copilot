@@ -46,14 +46,14 @@ export function StrategyEditor({ strategy, disabled, onRename, onConditionChange
           <select id={`condition-operator-${index}`} aria-label={`${field}比较方式`} value={condition.operator} disabled={disabled || condition.field === 'industry'} onChange={(event) => onConditionChange(index, { operator: event.target.value as ConditionOperator })}>
             {operators.filter((operator) => condition.field !== 'industry' || operator.value === 'eq').map((operator) => <option value={operator.value} key={operator.value}>{operator.label}</option>)}
           </select>
-          {numeric ? <NumericConditionInput condition={condition} index={index} disabled={disabled} onChange={onConditionChange} /> : <input className="text-input" aria-label="所属行业" value={condition.value} disabled />}
-          {condition.field !== 'industry' && <button className="icon-button remove-condition" type="button" aria-label={`移除${field}条件`} disabled={disabled} onClick={() => onConditionRemove(index)}>移除</button>}
+          {numeric ? <NumericConditionInput condition={condition} index={index} disabled={disabled} onChange={onConditionChange} /> : <input className="text-input" aria-label="所属行业" value={String(condition.value)} placeholder="输入行业名称" disabled={disabled} onChange={(event) => onConditionChange(index, { value: event.target.value })} />}
+          <button className="icon-button remove-condition" type="button" aria-label={`移除${field}条件`} disabled={disabled} onClick={() => onConditionRemove(index)}>移除</button>
         </div>
         <span className="condition-date">指标日期：{condition.statisticDate ?? '不适用'}</span>
       </article>;
     })}</div>
     <div className="editor-actions"><label className="sr-only" htmlFor="add-condition">添加筛选条件</label><select id="add-condition" value={newField} onChange={(event) => setNewField(event.target.value as Condition['field'])}>
-      <option value="market_cap_cny">总市值</option><option value="net_profit_parent_yoy_pct">归母净利润同比增长率</option>
+      <option value="industry">所属行业</option><option value="market_cap_cny">总市值</option><option value="net_profit_parent_yoy_pct">归母净利润同比增长率</option>
     </select><button className="secondary-button" type="button" disabled={disabled || strategy.conditions.some((condition) => condition.field === newField)} onClick={() => onConditionAdd(newField)}>添加条件</button></div>
     <label className="field-label sort-label" htmlFor="sort-direction">{strategy.sort.field === 'market_cap_cny' ? '总市值排序' : '利润增长排序'}</label>
     <select id="sort-direction" value={strategy.sort.direction} disabled={disabled} onChange={(event) => onSortDirectionChange(event.target.value as 'asc' | 'desc')}><option value="desc">由高到低</option><option value="asc">由低到高</option></select>

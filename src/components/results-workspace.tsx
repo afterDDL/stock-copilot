@@ -44,12 +44,12 @@ export function ResultsWorkspace({ result, previousResult, snapshot, snapshotEnv
   return <section className="results-column" aria-labelledby="results-heading">
     <section className="card results-card" aria-labelledby="results-heading">
       <div className="section-heading results-title-row"><div><p className="eyebrow">基于真实数据</p><h2 id="results-heading">研究结果</h2></div>
-        {result && <div className="result-count">{result.included.length + result.excluded.length + result.unknown.length} 只银行股</div>}
+        {result && <div className="result-count">{result.included.length + result.excluded.length + result.unknown.length} 只股票</div>}
       </div>
       {snapshot && snapshotEnvelope ? <div className={`snapshot-banner snapshot-${snapshotEnvelope.mode}`}>
         <div className="snapshot-icon">{snapshotEnvelope.mode === 'historical' ? '◷' : '●'}</div><div className="snapshot-copy"><strong>{snapshotEnvelope.mode === 'historical' ? '历史快照' : '实时数据'}</strong><span>{snapshotEnvelope.mode === 'historical' ? `截至 ${snapshot.asOf} · 采集于 ${new Date(snapshotEnvelope.evidence.capturedAt).toLocaleString('zh-CN')}` : `数据日期 ${snapshot.asOf}`}</span></div>
         <button className="text-button" type="button" aria-expanded={sourceOpen} aria-label="查看数据来源详情" onClick={() => setSourceOpen((open) => !open)}>数据详情</button>
-        <details id="source-details" className="source-details" open={sourceOpen}><summary className="sr-only">数据来源与覆盖情况</summary><p>数据来源：{snapshotEnvelope.evidence.source}</p><p>股票覆盖：{snapshot.coverage.returnedStocks}/{snapshot.coverage.expectedStocks} 只</p><p>总市值日期：{snapshotEnvelope.evidence.statisticDates.marketCap ?? '未知'}</p><p>利润增长日期：{snapshotEnvelope.evidence.statisticDates.netProfitYoy ?? '未知'}</p><p>实时查询步骤：{snapshotEnvelope.evidence.liveRequests.length}</p>{snapshotEnvelope.error && <p>实时查询失败原因：{snapshotEnvelope.error}</p>}</details>
+        <details id="source-details" className="source-details" open={sourceOpen}><summary className="sr-only">数据来源与覆盖情况</summary><p>数据来源：{snapshotEnvelope.evidence.source}</p><p>股票覆盖：{snapshot.coverage.returnedStocks}/{snapshot.coverage.expectedStocks} 只</p><p>总市值日期：{snapshotEnvelope.evidence.statisticDates.marketCap ?? '未知'}</p><p>利润增长日期：{snapshotEnvelope.evidence.statisticDates.netProfitYoy ?? '未知'}</p><p>实时查询步骤：{Array.isArray(snapshotEnvelope.evidence.liveRequests) ? snapshotEnvelope.evidence.liveRequests.length : snapshotEnvelope.evidence.liveRequests}</p><p>本次结果是条件检索返回的候选，不保证覆盖沪深北 A 股全部股票。</p>{snapshotEnvelope.error && <p>数据查询暂不可用，请稍后重试。</p>}</details>
       </div> : <div className="results-empty-state"><div className="empty-illustration">⌕</div><h3>你的研究结果会出现在这里</h3><p>运行筛选后，可查看入选、排除和无法判定的股票与对应证据。</p></div>}
       {result && buckets && <>
         <div className="result-layers" aria-label="结果分析层">

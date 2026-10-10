@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useCopilot } from './use-copilot';
 import type { DataSnapshot, Strategy } from '../lib/domain/types';
 
@@ -25,11 +25,14 @@ const snapshot: DataSnapshot = {
     industry: { available: 1, missing: 0 }, market_cap_cny: { available: 1, missing: 0 }, net_profit_parent_yoy_pct: { available: 1, missing: 0 },
   } },
 };
+const envelope = (value: DataSnapshot) => ({ mode: 'live' as const, snapshot: value, coverage: value.coverage, evidence: { source: 'iFinD', capturedAt: '2026-10-10T00:00:00Z', statisticDates: {}, liveRequests: [] } });
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('useCopilot', () => {
   it('submits intent and lets the user edit an AI-inferred threshold', async () => {
     const intentRequest = vi.fn().mockResolvedValue({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
-    const { result } = renderHook(() => useCopilot({ intentRequest, snapshotRequest: vi.fn() }));
+    const { result } = renderHook(() => useCopilot({ intentRequest, stockSearchRequest: vi.fn() }));
     act(() => result.current.actions.setDraft('找市值至少1000亿元的银行股'));
     await act(async () => result.current.actions.submitIntent());
     expect(intentRequest).toHaveBeenCalledWith('找市值至少1000亿元的银行股', undefined);
@@ -43,8 +46,8 @@ describe('useCopilot', () => {
       { ...strategy.conditions[1], operator: 'lte', value: 50_000_000_000, sourceExpression: '上限500亿元' },
     ] };
     const intentRequest = vi.fn().mockResolvedValue({ strategy: conflicting, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
-    const snapshotRequest = vi.fn().mockResolvedValue({ mode: 'historical', snapshot, coverage: snapshot.coverage, evidence: { source: 'fixture', capturedAt: '2026-10-09T00:00:00Z', statisticDates: {}, liveRequests: [] } });
-    const { result } = renderHook(() => useCopilot({ intentRequest, snapshotRequest }));
+    const stockSearchRequest = vi.fn().mockResolvedValueOnce(envelope(snapshot)).mockResolvedValueOnce(envelope({ ...snapshot, snapshotId: 'snapshot-2' }));
+    const { result } = renderHook(() => useCopilot({ intentRequest, stockSearchRequest }));
     act(() => result.current.actions.setDraft('找大市值银行股'));
     await act(async () => result.current.actions.submitIntent());
     expect(result.current.conflicts).toHaveLength(1);
@@ -53,11 +56,12 @@ describe('useCopilot', () => {
     expect(result.current.conflicts).toHaveLength(0);
     expect(result.current.actions.canRun).toBe(true);
     await act(async () => result.current.actions.runScreen());
-    expect(snapshotRequest).toHaveBeenCalledTimes(1);
+    expect(stockSearchRequest).toHaveBeenNthCalledWith(1, expect.objectContaining({ conditions: expect.not.arrayContaining([expect.objectContaining({ field: 'market_cap_cny', operator: 'lte', value: 50_000_000_000 })]) }));
     expect(result.current.result?.included.map((item) => item.stock.code)).toEqual(['600000']);
     act(() => result.current.actions.updateCondition(1, { value: 200_000_000_000 }));
     await act(async () => result.current.actions.runScreen());
-    expect(snapshotRequest).toHaveBeenCalledTimes(1);
+    expect(stockSearchRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({ conditions: expect.not.arrayContaining([expect.objectContaining({ field: 'market_cap_cny', value: 100_000_000_000 })]) }));
+    expect(stockSearchRequest).toHaveBeenCalledTimes(2);
     expect(result.current.diff).toMatchObject({ added: [], retained: [], removed: ['600000'] });
   });
 
@@ -65,7 +69,7 @@ describe('useCopilot', () => {
     const intentRequest = vi.fn()
       .mockResolvedValueOnce({ strategy, assumptions: [], clarifications: ['使用哪个报告期？', '总市值最低门槛是多少？'], unsupportedRequests: [], canExecute: false })
       .mockResolvedValueOnce({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
-    const { result } = renderHook(() => useCopilot({ intentRequest, snapshotRequest: vi.fn() }));
+    const { result } = renderHook(() => useCopilot({ intentRequest, stockSearchRequest: vi.fn() }));
     act(() => result.current.actions.setDraft('筛银行股'));
     await act(async () => result.current.actions.submitIntent());
     expect(result.current.actions.canRun).toBe(false);
@@ -164,12 +168,55 @@ describe('useCopilot', () => {
     expect(result.current.error).toBe('服务暂不可用');
   });
 
+  it('keeps the last successful result and the current draft when a fresh market query fails', async () => {
+    const failure = new Error('结果较多，请补充行业或提高筛选门槛。');
+    const stockSearchRequest = vi.fn().mockResolvedValueOnce(envelope(snapshot)).mockRejectedValueOnce(failure);
+    const intentRequest = vi.fn().mockResolvedValue({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
+    const { result } = renderHook(() => useCopilot({ intentRequest, stockSearchRequest }));
+    act(() => result.current.actions.setDraft('利润仍在增长'));
+    await act(async () => result.current.actions.submitIntent());
+    await act(async () => result.current.actions.runScreen());
+    const successfulResult = result.current.result;
+    act(() => result.current.actions.setDraft('改查新能源行业'));
+    act(() => result.current.actions.updateCondition(1, { value: 200_000_000_000 }));
+    await act(async () => result.current.actions.runScreen());
+    expect(stockSearchRequest).toHaveBeenCalledTimes(2);
+    expect(result.current.result).toBe(successfulResult);
+    expect(result.current.snapshot?.snapshotId).toBe(snapshot.snapshotId);
+    expect(result.current.draft).toBe('改查新能源行业');
+    expect(result.current.error).toBe('结果较多，请补充行业或提高筛选门槛。');
+  });
+
+  it('POSTs the current strategy to stock-search on each run and maps needs_narrowing to concise copy', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(envelope(snapshot)), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'needs_narrowing', message: 'internal truncation detail' } }), { status: 422, headers: { 'content-type': 'application/json' } }));
+    const intentRequest = vi.fn().mockResolvedValue({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
+    const { result } = renderHook(() => useCopilot({ intentRequest }));
+    act(() => result.current.actions.setDraft('找利润仍在增长的股票'));
+    await act(async () => result.current.actions.submitIntent());
+    await act(async () => result.current.actions.runScreen());
+    const successfulResult = result.current.result;
+    act(() => result.current.actions.updateCondition(1, { value: 200_000_000_000 }));
+    await act(async () => result.current.actions.runScreen());
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    for (const [url, options] of fetchSpy.mock.calls) {
+      expect(url).toBe('/api/stock-search');
+      expect(options?.method).toBe('POST');
+      expect(JSON.parse(String(options?.body))).toEqual({ strategy: expect.objectContaining({ market: 'cn_a' }) });
+    }
+    expect(result.current.result).toBe(successfulResult);
+    expect(result.current.error).toBe('结果较多，请补充行业或提高筛选门槛。');
+    expect(result.current.error).not.toContain('internal truncation detail');
+  });
+
   it('restores a saved strategy without carrying a stale snapshot or screening result', async () => {
     const storage = { list: () => [], save: vi.fn(), load: vi.fn().mockReturnValue(strategy), delete: vi.fn() };
     const { result } = renderHook(() => useCopilot({
       storage,
       intentRequest: vi.fn().mockResolvedValue({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true }),
-      snapshotRequest: vi.fn().mockResolvedValue({ mode: 'historical', snapshot, coverage: snapshot.coverage, evidence: { source: 'fixture', capturedAt: '2026-10-09T00:00:00Z', statisticDates: {}, liveRequests: [] } }),
+      stockSearchRequest: vi.fn().mockResolvedValue(envelope(snapshot)),
     }));
     act(() => result.current.actions.setDraft('银行股'));
     await act(async () => result.current.actions.submitIntent());
