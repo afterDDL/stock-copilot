@@ -25,7 +25,7 @@ export function ChatPanel({ messages, draft, busy, busyText = '正在整理你�
     {error && <p className="inline-error" role="alert">{error}</p>}
     <form className="composer" onSubmit={submit}>
       <label className="sr-only" htmlFor="intent-draft">请输入选股需求</label>
-      <textarea id="intent-draft" aria-label="请输入选股需求" value={draft} onChange={(event) => onDraftChange(event.target.value)} onKeyDown={keyDown} placeholder="描述你的选股想法…" rows={2} />
+      <textarea id="intent-draft" aria-label="请输入选股需求" value={draft} onChange={(event) => onDraftChange(event.target.value)} onKeyDown={keyDown} placeholder="描述你的选股想法… 比如：‘市值高’" rows={2} />
       <div className="composer-footer"><span>Enter 发送 · Shift + Enter 换行</span><button className="primary-button" type="submit" disabled={!draft.trim() || busy}>{busy ? '处理中…' : '发送'}</button></div>
     </form>
   </section>;

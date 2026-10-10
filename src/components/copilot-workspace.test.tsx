@@ -34,6 +34,7 @@ describe('CopilotWorkspace', () => {
     expect(screen.getByRole('note')).toHaveTextContent('iFinD 账号调用额度已用完，当前无法获取实时数据。');
     expect(screen.getAllByText('沪深北 A 股').length).toBeGreaterThan(0);
     expect(screen.getByText('描述你想找的股票')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '请输入选股需求' })).toHaveAttribute('placeholder', '描述你的选股想法… 比如：‘市值高’');
     expect(screen.getByText('找市值较大、利润仍在增长的股票，增长更快的优先。')).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/仅支持银行|银行股研究|描述你想找的银行股|银行股 · P0/);
   });
