@@ -44,9 +44,26 @@ function strategy(conditions = [
     id: 'bank-screening',
     version: 1,
     name: '银行股筛选',
-    industry: 'bank',
+    market: 'cn_a',
     conditions,
     sort: { field: 'net_profit_parent_yoy_pct', direction: 'desc' },
+  };
+}
+
+function liveEnvelope(industry?: string) {
+  const snapshot = structuredClone(snapshotEnvelope.snapshot);
+  if (industry) {
+    for (const stock of snapshot.stocks) {
+      stock.industry = industry;
+      stock.metrics.industry.value = industry;
+    }
+  }
+  return {
+    mode: 'live', snapshot, coverage: snapshot.coverage,
+    evidence: {
+      source: 'E2E deterministic iFinD fixture', capturedAt: '2026-10-10T00:00:00.000Z',
+      statisticDates: { marketCap: '2026-10-09', netProfitYoy: '2026-06-30' }, liveRequests: 2,
+    },
   };
 }
 
@@ -61,11 +78,27 @@ function intent(strategyValue = strategy(), extra: Record<string, unknown> = {})
   };
 }
 
-async function installDeterministicApiRoutes(page: Page) {
-  await page.route('**/api/bank-snapshot**', async (route: Route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(snapshotEnvelope) });
-  });
+function strategyForQuery(query: string) {
+  if (/全市场股票/u.test(query)) {
+    return strategy([condition('market_cap_cny', 'gte', 1, '总市值大于0元')]);
+  }
+  if (/全市场|全A股|沪深北/u.test(query)) {
+    return strategy([
+      condition('market_cap_cny', 'gte', 100_000_000_000, '总市值至少1000亿元'),
+      condition('net_profit_parent_yoy_pct', 'gt', 0, '归母净利润同比增长率大于0%'),
+    ]);
+  }
+  if (/电子行业/u.test(query)) {
+    return strategy([
+      condition('industry', 'eq', '电子', '电子行业'),
+      condition('market_cap_cny', 'gte', 100_000_000_000, '总市值至少1000亿元'),
+      condition('net_profit_parent_yoy_pct', 'gt', 0, '归母净利润同比增长率大于0%'),
+    ]);
+  }
+  return strategy();
+}
 
+async function installDeterministicApiRoutes(page: Page) {
   await page.route('**/api/intent', async (route: Route) => {
     const request = route.request().postDataJSON() as { query: string };
     const query = request.query;
@@ -111,7 +144,21 @@ async function installDeterministicApiRoutes(page: Page) {
       });
       return;
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ intent: intent() }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ intent: intent(strategyForQuery(query)) }) });
+  });
+
+  await page.route('**/api/stock-search', async (route: Route) => {
+    const { strategy: requestStrategy } = route.request().postDataJSON() as { strategy: ReturnType<typeof strategy> };
+    const narrow = !requestStrategy.conditions.some((item) => item.field === 'industry')
+      && requestStrategy.conditions.every((item) => item.field !== 'market_cap_cny'
+        || (typeof item.value === 'number' && item.value < 100_000_000_000));
+    await route.fulfill({
+      status: narrow ? 422 : 200,
+      contentType: 'application/json',
+      body: JSON.stringify(narrow
+        ? { error: { code: 'needs_narrowing', message: '结果较多，请补充行业或提高筛选门槛。' } }
+        : liveEnvelope(requestStrategy.conditions.find((item) => item.field === 'industry')?.value as string | undefined)),
+    });
   });
 }
 
@@ -137,7 +184,7 @@ test('turns a fuzzy bank-stock request into an editable 1000→2000 billion diff
   await runScreen(page);
 
   await expect(page.getByRole('tab', { name: /入选/ })).toContainText('16');
-  await expect(page.getByText('历史快照').first()).toBeVisible();
+  await expect(page.getByText('实时数据').first()).toBeVisible();
   await expect(page.getByRole('row').nth(1)).toContainText('宁波银行');
 
   const marketCap = page.getByRole('spinbutton', { name: '总市值门槛（元）' });
@@ -216,8 +263,8 @@ test('keeps unsupported valuation and return prediction requests visible and non
   await submitIntent(page, '找 PB 估值低、下周收益翻倍的银行股');
 
   await expect(page.getByRole('heading', { name: '暂不支持的要求' })).toBeVisible();
-  await expect(page.getByText('PB估值', { exact: true })).toBeVisible();
-  await expect(page.getByText('收益预测', { exact: true })).toBeVisible();
+  await expect(page.getByText('暂不支持“PB估值”指标查询。', { exact: true })).toBeVisible();
+  await expect(page.getByText('暂不支持“收益预测”指标查询。', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '运行筛选' })).toBeDisabled();
 });
 
@@ -235,4 +282,37 @@ test('sends the exact natural-language request through the intent API without ma
   expect(apiResponse.ok()).toBe(true);
   await expect(page.getByRole('heading', { name: '暂不支持的要求' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '运行筛选' })).toBeEnabled();
+});
+
+test('runs bounded market-wide and explicit non-bank searches through POST /api/stock-search', async ({ page }) => {
+  await submitIntent(page, '全市场总市值至少1000亿元且利润同比增长');
+  await expect(page.getByRole('button', { name: '运行筛选' })).toBeEnabled();
+  const marketRequest = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/stock-search');
+  await runScreen(page);
+  const marketPost = await marketRequest;
+  expect(marketPost.method()).toBe('POST');
+  const marketStrategy = (marketPost.postDataJSON() as { strategy: { conditions: Condition[] } }).strategy;
+  expect(marketStrategy.conditions.some((item) => item.field === 'industry')).toBe(false);
+  await expect(page.getByText('实时数据')).toBeVisible();
+  await page.getByRole('button', { name: '查看数据来源详情' }).click();
+  await expect(page.locator('#source-details')).toContainText('本次结果是条件检索返回的候选，不保证覆盖沪深北 A 股全部股票。');
+
+  await submitIntent(page, '筛选电子行业股票，总市值至少1000亿元且利润同比增长');
+  const industryRequest = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/stock-search');
+  await runScreen(page);
+  const industryPost = await industryRequest;
+  expect(industryPost.method()).toBe('POST');
+  expect((industryPost.postDataJSON() as { strategy: { conditions: Condition[] } }).strategy.conditions)
+    .toContainEqual(expect.objectContaining({ field: 'industry', value: '电子' }));
+  await expect(page.getByRole('row').nth(1)).toContainText('宁波银行');
+  await page.getByRole('row').nth(1).getByRole('button', { name: '宁波银行' }).click();
+  await expect(page.getByRole('dialog')).toContainText('所属行业');
+});
+
+test('shows the concise narrowing message when broad candidate search is rejected', async ({ page }) => {
+  await submitIntent(page, '全市场股票');
+  await page.getByRole('button', { name: '运行筛选' }).click();
+  await expect(page.getByRole('region', { name: '选股对话' }).getByRole('alert'))
+    .toHaveText('结果较多，请补充行业或提高筛选门槛。');
+  await expect(page.getByRole('tab', { name: /入选/ })).toHaveCount(0);
 });
