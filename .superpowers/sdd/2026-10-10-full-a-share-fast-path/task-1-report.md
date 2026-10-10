@@ -28,3 +28,9 @@ The following files were updated beyond the brief to keep `Strategy` constructio
 ## Integration concern
 
 `src/hooks/use-copilot.ts` still wraps each unsupported reason in its existing UI prefix. The resolver output itself is concise and contains no internal field identifiers, but the final rendered sentence may be redundant until the UI-copy task updates that formatter.
+
+## Review fix (round 1)
+
+- Residual intent scanning now removes industry values already accepted from model-provided conditions, including arbitrary names without a recognized suffix.
+- Added regression coverage for `非银行机构` as an industry condition with no suffix.
+- Verification: `npm test -- src/lib/ai/intent-schema.test.ts` — 60 tests passed; `npm run typecheck` — passed.

@@ -48,6 +48,17 @@ describe('parseIntentOutput', () => {
     expect(result.canExecute).toBe(true);
   });
 
+  it('recognizes a model-provided arbitrary industry name without a recognized suffix', () => {
+    const result = parseIntentOutput('筛选非银行机构', {
+      ...emptyDelta,
+      condition_changes: [{ field: 'industry', operator: 'eq', value: '非银行机构', unit: '行业', action: 'upsert', source_expression: '非银行机构', ai_inferred: false, editable: true }],
+    }, null);
+
+    expect(result.strategy.conditions).toEqual([expect.objectContaining({ field: 'industry', value: '非银行机构' })]);
+    expect(result.unsupportedRequests).toEqual([]);
+    expect(result.canExecute).toBe(true);
+  });
+
   it('removes an industry condition when the model explicitly removes it', () => {
     const result = parseIntentOutput('取消行业限制', {
       ...emptyDelta,

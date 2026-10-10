@@ -107,11 +107,11 @@ const profitGrowthLanguage = new RegExp(`(?:${profitGrowthAliases.join('|')})(?:
 const allMarketLanguage = /(?:沪深北\s*A股|沪深北A股|全市场|全A股|A股|所属行业|行业|板块)/g;
 const requestScaffolding = /(?:请帮我|帮我|请|我想要|我想|我要|寻找|找|按照|根据|按|进行|筛选|选出|选择|选股|选|些|还在|仍在|依然|把|将|门槛|阈值|条件|指标|限制|取消|删除|移除|保留|股票|个股|并且|而且|以及|并|且|和|与|及|的|中|里)/g;
 
-function detectUncoveredCriteria(query: string): string[] {
+function detectUncoveredCriteria(query: string, recognizedIndustryValues: string[] = []): string[] {
   // Spaces preserve boundaries, so separated fragments cannot accidentally
   // combine into a recognized alias after another field has been consumed.
   const industry = extractIndustryFromQuery(query);
-  const residual = query.normalize('NFKC')
+  let residual = query.normalize('NFKC')
     .replace(marketCapLanguage, ' ')
     .replace(profitGrowthLanguage, ' ')
     .replace(/(?:归母净利润|净利润|业绩|利润)还在增长|(?:归母净利润|净利润|利润)仍在增长|利润增长越快越好/g, ' ')
@@ -120,6 +120,7 @@ function detectUncoveredCriteria(query: string): string[] {
     .replace(industry ?? '\u0000', ' ')
     .replace(allMarketLanguage, ' ')
     .replace(requestScaffolding, ' ');
+  for (const value of recognizedIndustryValues) residual = residual.replaceAll(value, ' ');
   return [...new Set(residual.split(/[\s\p{P}]+/u).filter(Boolean))];
 }
 
@@ -237,7 +238,10 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
     conditions,
     sort: { field: 'net_profit_parent_yoy_pct', direction: hasProfitCondition ? 'desc' : (delta.sort_direction ?? 'desc') },
   });
-  for (const criterion of detectUncoveredCriteria(query)) {
+  const recognizedIndustryValues = conditions
+    .filter((condition) => condition.field === 'industry')
+    .map((condition) => String(condition.value));
+  for (const criterion of detectUncoveredCriteria(query, recognizedIndustryValues)) {
     const label = userRequestLabel(criterion);
     if (!unsupportedRequests.some(({ request }) => request === label)) {
       unsupportedRequests.push({ request: label, reason: unsupportedCopy(label) });
