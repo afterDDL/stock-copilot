@@ -33,9 +33,17 @@
 
 - 将电子行业 Playwright fixture 从银行股改为语义对应的电子半导体股票华兴源创（688001），断言行业、代码、总市值与归母净利润同比指标；focused E2E 通过。fixture 市值为 2026-10-09 收盘价乘以已披露股数的计算值（非 iFinD 实测）；净利润同比来自 2026 半年报数值。参考：[历史行情](https://cn.investing.com/equities/suzhou-hyc-technology-co-ltd-historical-data)、[上交所股本公告](https://star.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-05-20/688001_20260520_J73J.pdf)、[半年报数据](https://stock.stockstar.com/notice/SN2026082800052185.shtml)。这只是确定性 UI fixture，不是本轮真实行情验证。
 - 修正 iFinD 表格解析对额外列、两个已知指标列、市场总值 `亿/万亿` 后缀的假设，并保留安全的内部失败分类。覆盖性测试用于确保额外字段不会未经 allowlist 进入规范化数据。
-- 脱敏直接探针调用 `fetchAshareCandidates`，只记录 MCP stage / HTTP status、耗时和异常分类；initialize、initialized notification 与 tool_call 均 HTTP 200。半导体、电力设备、有界全市场三类目标策略都于 tool_call 后以 `AshareSearchError/truncated_content` 失败，约 721 / 2424 / 2409 ms。另一个明显不可能有结果的极端阈值策略仍以同类错误失败（约 2434 ms）。没有输出或保存凭证、Authorization、session 或原始 MCP payload。
-- 在本地生产 API 重复三类策略请求：半导体 HTTP 422 `needs_narrowing` / 560 ms；电力设备 HTTP 503 `data_unavailable` / 716 ms；有界全市场 HTTP 503 `data_unavailable` / 702 ms。均无 snapshot，候选行数 0。API 的 `data_unavailable` 没有暴露内层原因；结合直接探针可确认底层 MCP HTTP 可达且内容解析遭截断，但不推断授权或限流问题。真实候选数据验收仍失败。
+- 后续脱敏复现更正了根因：官方 iFinD skill wrapper 对简单 `search_stocks` 返回 HTTP 200，content 明确提示工具请求次数/账号权益上限且没有数据表，确认当前账号搜索调用额度已耗尽。Round 1 将这类失败记录为 `truncated_content` 是错误归因，现以本节更正；未输出或保存凭证、Authorization、session 或原始 MCP payload。
+- 本地生产 API 的历史复测为：半导体 HTTP 422 `needs_narrowing` / 560 ms；电力设备 HTTP 503 `data_unavailable` / 716 ms；有界全市场 HTTP 503 `data_unavailable` / 702 ms。均无 snapshot，候选行数 0。以上是 quota classifier 修复前状态，第一条业务码属于误分类；API 对外仍使用通用 `data_unavailable`，不暴露 quota 工程细节。真实候选数据验收仍失败。
 - Review 后验证：`npm test` 19 个测试文件、175 项通过；focused 非银行 E2E 1/1；全量 `npm run test:e2e -- --workers=1` 8/8；`npm run typecheck` 通过；`npm run build` 通过。完整 E2E 包含阈值编辑/差异、证据、比较、保存和重开、市场范围及宽查询提示。
 - 搜索边界仍是条件候选检索而非穷尽。MCP HTTP 200 不代表数据请求成功；出现截断必须拒绝展示局部候选。即便后续某次无截断通过解析，也不证明整个市场零遗漏。`README.md`、`TEST_REPORT.md`、`AI_DEV_LOG.md`、`NEXT_STEPS.md` 已同步该限制和最新数据。
 
 计划提交：`docs: hand off A-share candidate screening MVP`。
+
+## Review round 2：账号权益额度错误分类
+
+- 未再发真实 iFinD 请求，以免继续消耗已达上限的账号额度。采用 parent 提供的官方 skill wrapper 脱敏证据：简单 `search_stocks` 的 MCP HTTP 为 200，content 是中文“工具请求次数上限/账号权益上限”提示而不是数据表；凭证与鉴权数据没有写入日志或文档。
+- 先在 `client.test.ts` 增加真实 `IfindMcpClient` 路径回归：分别用“工具请求次数已达到上限”和“账号权益上限不足”MCP 文本触发 `fetchAshareCandidates`。确认旧实现失败并返回通用 `tool_error`（RED）；修复后稳定返回不可重试的 `IfindError` / `quota_exhausted`（GREEN），不会重试或进入候选解析，因此不会误判 `truncated_content` / `needs_narrowing`。
+- 公共 `/api/stock-search` catch-all 保持通用 HTTP 503 / `data_unavailable` 和现有用户文案，不对 UI 暴露额度工程分类。
+- `TEST_REPORT.md`、`README.md`、`NEXT_STEPS.md`、`AI_DEV_LOG.md` 更正先前把 smoke 失败归为截断的推断，明确当前真实数据验收因账号 `search_stocks` 权益调用额度耗尽未通过；只有额度恢复后才应再次执行两类非银行行业和一个有界全市场查询。
+- 本轮完成后 `npm test` 19 个文件/177 项通过，`npm run typecheck` 通过。全量 E2E 和 build 的最近结果仍为 Round 1 8/8 与通过；本轮只改客户端分类和报告，没有消耗真实额度。

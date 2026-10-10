@@ -6,27 +6,25 @@
 
 | 项目 | 命令 / 操作 | 结果 | 证据 / 限制 |
 |---|---|---|---|
-| Vitest 全量 | `npm test` | 通过 | 19 个测试文件，175 项通过。 |
+| Vitest 全量 | `npm test` | 通过 | 19 个测试文件，177 项通过（含本轮额度错误分类回归）。 |
 | 类型检查 | `npm run typecheck` | 通过 | `tsc --noEmit` 退出状态 0。 |
 | 生产构建 | `npm run build` | 通过 | Next.js 16.4.0；页面和 `/api/intent`、`/api/bank-snapshot`、`/api/stock-search` 路由生成成功。 |
 | 浏览器端到端 | `npm run test:e2e -- --workers=1` | 通过 | 8/8；覆盖条件编辑与差异、逐股证据、冲突修正、澄清、比较、保存/刷新恢复、不支持指标、无行业市场策略、非银行行业条件和宽请求提示。接口数据使用确定性 Playwright mock。 |
 | 桌面与窄屏视觉 | Playwright 截图检查 | 通过 | 1440×1000 与 390×844；主要内容可见，窄屏按对话/策略/结果纵向排列，未见横向溢出。 |
-| 真实 iFinD smoke | 本地生产服务 `POST /api/stock-search` + 脱敏 `fetchAshareCandidates` 探针 | 未通过 | 三类策略均未返回候选。MCP HTTP 可达，但工具返回被解析为 `truncated_content`；API 复测为 `needs_narrowing` / `data_unavailable`。 |
+| 真实 iFinD smoke | 本地生产服务 `POST /api/stock-search` + 官方 iFinD skill wrapper 安全复现 | 未通过 | MCP HTTP 200 可达；`search_stocks` 内容明确提示工具调用次数/账号权益上限，无数据表。确认阻塞为账号搜索额度耗尽。 |
 | 云端/Vercel iFinD | 未执行 | 尚未验证 | 本轮没有云端请求证据。 |
 
 ## 真实 iFinD smoke 明细
 
-以下 API 数值是 parser 修复后的复测，响应没有 `snapshot`，因此候选行数 0 表示没有可用数据结果，不代表零只符合条件。另用只记录 MCP 阶段 HTTP 状态、耗时和安全错误分类的临时探针直接调用 `fetchAshareCandidates`；它不输出凭证、请求头、session 或原始 MCP 内容。
+以下 API 数值是额度错误分类修复前的历史复测，响应没有 `snapshot`，因此候选行数 0 表示没有可用数据结果，不代表零只符合条件。官方 iFinD skill wrapper 的额外安全复现确认了工具层 HTTP 200 与中文额度上限提示，无数据表。当前客户端将此类内容识别为 `quota_exhausted`，公共 API 仍统一返回 503 `data_unavailable`。没有重试真实查询以避免继续消耗额度。
 
 | 策略 | HTTP | 业务码 | 候选行数 | 耗时 | 错误分类 |
 |---|---:|---|---:|---:|---|
-| 电子-半导体；总市值 ≥ 200 亿元；归母净利润同比 > 0% | 422 | `needs_narrowing` | 0 | 560 ms | 底层直接探针：MCP initialize / notification / tool_call 均 HTTP 200；业务解析 `AshareSearchError/truncated_content`。 |
-| 电力设备；总市值 ≥ 10000 亿元；归母净利润同比 > 0% | 503 | `data_unavailable` | 0 | 716 ms | 底层直接探针同样归类为 `truncated_content`；API 不暴露该 503 的内层分类。 |
-| 无行业；总市值 ≥ 50000 亿元；归母净利润同比 > 10%（有界全市场策略） | 503 | `data_unavailable` | 0 | 702 ms | 底层直接探针同样归类为 `truncated_content`；API 不暴露该 503 的内层分类。 |
+| 电子-半导体；总市值 ≥ 200 亿元；归母净利润同比 > 0% | 422 | `needs_narrowing` | 0 | 560 ms | 历史 API 结果；额度内容当时未识别，业务码为误分类。 |
+| 电力设备；总市值 ≥ 10000 亿元；归母净利润同比 > 0% | 503 | `data_unavailable` | 0 | 716 ms | 历史 API 结果；公共层隐藏上游额度提示。 |
+| 无行业；总市值 ≥ 50000 亿元；归母净利润同比 > 10%（有界全市场策略） | 503 | `data_unavailable` | 0 | 702 ms | 历史 API 结果；公共层隐藏上游额度提示。 |
 
-为确认过滤条件是否能消除截断，另试总市值 ≥ 1000 万亿元且净利润同比 > 1000% 的明显极窄策略；该直接请求仍返回 `truncated_content`（MCP 各阶段 HTTP 200，约 2434 ms）。三类目标策略直接探针也均在 tool_call HTTP 200 后得到 `truncated_content`，耗时约 721、2424、2409 ms。证据指向上游返回内容/查询执行的截断边界，而非 HTTP 不可达；不能据此断言上游筛选条件被忽略，亦不能把它归为授权问题。真实数据验收仍未通过。
-
-三次请求真实到达本地 API，但未产生候选数据；HTTP 业务状态在复测中不一致，MCP 传输阶段为 HTTP 200。只有直接解析层安全分类可确认 `truncated_content`；对于 API 返回的 `data_unavailable`，内层原因仍不可见，不推断为授权、限流或超时。凭证值、Authorization 头和 session 标识未输出或记录。
+早期直接探针曾将失败概括为 `truncated_content`，但这不是正确根因：额度错误文本不是数据表，且旧客户端未把中文权益提示分类出来。官方 iFinD skill wrapper 的安全复现提供了明确证据——HTTP 200、tool content 为“该工具请求次数上限/账号权益上限”类提示、没有数据表。故真实数据验收因当前账号 `search_stocks` 权益调用额度耗尽而未通过，并非真实空结果或可确认的内容截断。新客户端在 MCP 层返回安全的 `IfindError` / `quota_exhausted`，`/api/stock-search` 仍仅对外返回通用 503 `data_unavailable`。凭证值、Authorization 头和 session 标识未输出或记录。
 
 ## 结果边界与覆盖
 

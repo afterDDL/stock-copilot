@@ -104,6 +104,8 @@ export class IfindMcpClient {
       const toolResult = result as IfindToolResult;
       if (!Array.isArray(toolResult.content)) throw new IfindError('iFinD returned no readable tool content.', 'invalid_tool_result');
       const texts = toolResult.content.filter((item) => item?.type === 'text' && typeof item.text === 'string').map((item) => item.text!);
+      const contentQuotaExhausted = texts.some((text) => /(?:工具.{0,12}(?:请求|调用)次数.{0,8}上限|(?:账号|账户).{0,8}权益.{0,8}上限)/u.test(text));
+      if (contentQuotaExhausted) throw new IfindError('iFinD search quota is exhausted.', 'quota_exhausted');
       const contentRateLimit = texts.some((text) => /(?:\b429\b|too many requests|rate.?limit)/i.test(text));
       if (contentRateLimit) {
         if (attempt === 0) {

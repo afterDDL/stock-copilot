@@ -54,7 +54,7 @@ npm run dev
 - `/api/stock-search` 接收 `POST` 结构化策略，服务端调用 iFinD 并返回经过校验的候选与采集证据。
 - `src/lib/engine` 负责冲突检测、逐只条件判定、排序、证据解释和结果差异；`src/lib/research` 负责样本分布和研究辅助。
 
-最近真实 smoke 仍未通过：底层 MCP 传输可返回 HTTP 200，但候选内容因截断被拒绝；本地 API 的复测分别返回 `needs_narrowing` 或通用 `data_unavailable`。这不能证明筛选条件已在上游执行，也不能作为真实候选验收。云端连通性仍未验证。自动化测试与真实 smoke 记录见 [TEST_REPORT.md](./TEST_REPORT.md)；完整 Task 4 记录见 `.superpowers/sdd/2026-10-10-full-a-share-fast-path/task-4-report.md`。
+最近真实 smoke 未通过：iFinD MCP HTTP 可达（HTTP 200），但官方 skill wrapper 的 `search_stocks` 返回中文工具请求次数/账号权益上限提示，而非数据表，说明当前账号的搜索权益额度已耗尽。服务端将其分类为 `quota_exhausted`；公共 API 仍只返回通用“数据暂时不可用”，不向主 UI 暴露工程错误。额度恢复前不重复消耗请求。云端连通性仍未验证。自动化测试与真实 smoke 记录见 [TEST_REPORT.md](./TEST_REPORT.md)；完整 Task 4 记录见 `.superpowers/sdd/2026-10-10-full-a-share-fast-path/task-4-report.md`。
 
 ## 凭证
 
