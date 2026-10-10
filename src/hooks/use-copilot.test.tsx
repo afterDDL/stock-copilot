@@ -177,14 +177,31 @@ describe('useCopilot', () => {
     await act(async () => result.current.actions.submitIntent());
     await act(async () => result.current.actions.runScreen());
     const successfulResult = result.current.result;
+    const successfulQuery = result.current.successfulQuery;
     act(() => result.current.actions.setDraft('改查新能源行业'));
     act(() => result.current.actions.updateCondition(1, { value: 200_000_000_000 }));
     await act(async () => result.current.actions.runScreen());
     expect(stockSearchRequest).toHaveBeenCalledTimes(2);
     expect(result.current.result).toBe(successfulResult);
+    expect(result.current.successfulQuery).toBe(successfulQuery);
+    expect(result.current.resultStrategy?.conditions[1].value).toBe(100_000_000_000);
+    expect(result.current.strategy?.conditions[1].value).toBe(200_000_000_000);
+    expect(result.current.resultIsStale).toBe(true);
+    act(() => result.current.actions.rebaseDiff());
+    expect(result.current.previousStrategy?.conditions[1].value).toBe(100_000_000_000);
     expect(result.current.snapshot?.snapshotId).toBe(snapshot.snapshotId);
     expect(result.current.draft).toBe('改查新能源行业');
     expect(result.current.error).toBe('结果较多，请补充行业或提高筛选门槛。');
+  });
+
+  it('shows the concise account notice from a quota failure without exposing provider details', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ error: { code: 'data_unavailable', message: 'iFinD 账号调用额度已用完，当前无法获取实时数据。' } }), { status: 503 }));
+    const { result } = renderHook(() => useCopilot({ intentRequest: async () => ({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true }) }));
+    act(() => result.current.actions.setDraft('银行股'));
+    await act(async () => result.current.actions.submitIntent());
+    await act(async () => result.current.actions.runScreen());
+    expect(result.current.error).toBe('iFinD 账号调用额度已用完，当前无法获取实时数据。');
+    expect(result.current.result).toBeNull();
   });
 
   it('POSTs the current strategy to stock-search on each run and maps needs_narrowing to concise copy', async () => {

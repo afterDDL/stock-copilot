@@ -15,6 +15,20 @@ const strategy: Strategy = {
 };
 
 describe('financial mapping resolver', () => {
+  it.each([
+    ['筛选人工智能行业股票', '人工智能'],
+    ['找电子行业且市值至少100亿元', '电子'],
+    ['只看电子行业且市值至少100亿元', '电子'],
+  ])('extracts the industry without request verbs or later filters: %s', (query, industry) => {
+    const resolved = resolveIntent(query, { ...strategy, conditions: [] });
+    expect(resolved.strategy.conditions.find((item) => item.field === 'industry')?.value).toBe(industry);
+  });
+
+  it('preserves a model-provided industry when the request names that industry', () => {
+    const candidate = { ...strategy, conditions: [{ ...strategy.conditions[0], value: '人工智能', sourceExpression: '人工智能行业' }] };
+    const resolved = resolveIntent('筛选人工智能行业股票', candidate);
+    expect(resolved.strategy.conditions.find((item) => item.field === 'industry')?.value).toBe('人工智能');
+  });
   it('replaces a saved bank industry with an arbitrary exact industry after stripping a suffix', () => {
     const resolved = resolveIntent('改成新能源板块', strategy, { currentStrategy: strategy });
 

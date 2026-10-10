@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { strategySchema } from '../domain/schema';
 import { INDICATOR_META, type Condition, type Indicator, type Strategy } from '../domain/types';
+import { extractIndustryFromQuery, normalizeIndustryExpression } from '../mapping/industry';
 
 const fieldSchema = z.enum(['industry', 'market_cap_cny', 'net_profit_parent_yoy_pct']);
 const conditionChangeSchema = z.object({
@@ -122,19 +123,6 @@ function detectUncoveredCriteria(query: string, recognizedIndustryValues: string
     .replace(requestScaffolding, ' ');
   for (const value of recognizedIndustryValues) residual = residual.replaceAll(value, ' ');
   return [...new Set(residual.split(/[\s\p{P}]+/u).filter(Boolean))];
-}
-
-function normalizeIndustryExpression(expression: string): string {
-  return expression.trim().replace(/(?:行业|板块|股)$/u, '').trim();
-}
-
-function extractIndustryFromQuery(query: string): string | null {
-  const matches = query.normalize('NFKC').matchAll(/([\p{Script=Han}\p{L}\p{N}·]+?)(?:行业|板块|股)/gu);
-  for (const match of matches) {
-    const candidate = normalizeIndustryExpression(match[0] ?? '');
-    if (candidate && !/^(?:沪深北)?A$/i.test(candidate)) return candidate;
-  }
-  return null;
 }
 
 function unsupportedCopy(request: string): string {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { strategySchema } from '../../../lib/domain/schema';
-import { AshareSearchError } from '../../../lib/ifind/errors';
+import { AshareSearchError, IfindError } from '../../../lib/ifind/errors';
 import { fetchAshareCandidates } from '../../../lib/ifind/a-share-search';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +26,9 @@ export async function POST(request: Request): Promise<Response> {
     if (error instanceof AshareSearchError && error.code === 'needs_narrowing') {
       return Response.json({ error: { code: 'needs_narrowing', message: '结果较多，请补充行业或提高筛选门槛。' } }, { status: 422 });
     }
-    return Response.json({ error: { code: 'data_unavailable', message: '数据暂时不可用，请稍后重试。' } }, { status: 503 });
+    const message = error instanceof IfindError && error.code === 'quota_exhausted'
+      ? 'iFinD 账号调用额度已用完，当前无法获取实时数据。'
+      : '数据暂时不可用，请稍后重试。';
+    return Response.json({ error: { code: 'data_unavailable', message } }, { status: 503 });
   }
 }

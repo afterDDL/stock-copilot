@@ -17,6 +17,7 @@ export type SnapshotEnvelope = {
   evidence: { source: string; capturedAt: string; statisticDates: Record<string, string | null>; liveRequests: number | unknown[] };
   error?: string;
 };
+export type SuccessfulQuery = { strategy: Strategy; snapshot: DataSnapshot; envelope: SnapshotEnvelope; result: ScreeningResult };
 export type IntentEnvelope = {
   strategy: Strategy; assumptions: string[]; clarifications: string[];
   unsupportedRequests: Array<{ request: string; reason: string }>; canExecute: boolean;
@@ -43,6 +44,8 @@ async function requestStockSearch(strategy: Strategy): Promise<SnapshotEnvelope>
     if (!response.ok) {
       const message = body?.error?.code === 'needs_narrowing'
         ? '结果较多，请补充行业或提高筛选门槛。'
+        : body?.error?.message === 'iFinD 账号调用额度已用完，当前无法获取实时数据。'
+          ? 'iFinD 账号调用额度已用完，当前无法获取实时数据。'
         : '数据暂时不可用，请稍后重试。';
       throw new Error(message);
     }
@@ -50,7 +53,7 @@ async function requestStockSearch(strategy: Strategy): Promise<SnapshotEnvelope>
     return { ...body, snapshot } as SnapshotEnvelope;
   } catch (cause) {
     const message = errorText(cause);
-    if (message === '结果较多，请补充行业或提高筛选门槛。') throw cause;
+    if (message === '结果较多，请补充行业或提高筛选门槛。' || message === 'iFinD 账号调用额度已用完，当前无法获取实时数据。') throw cause;
     throw new Error('数据暂时不可用，请稍后重试。');
   }
 }
@@ -71,11 +74,15 @@ export function useCopilot(options: Options = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [strategy, setStrategy] = useState<Strategy | null>(null);
-  const [snapshot, setSnapshot] = useState<DataSnapshot | null>(null);
-  const [snapshotEnvelope, setSnapshotEnvelope] = useState<SnapshotEnvelope | null>(null);
-  const [result, setResult] = useState<ScreeningResult | null>(null);
-  const [baselineResult, setBaselineResult] = useState<ScreeningResult | null>(null);
-  const [baselineStrategy, setBaselineStrategy] = useState<Strategy | null>(null);
+  const [successfulQuery, setSuccessfulQuery] = useState<SuccessfulQuery | null>(null);
+  const [baselineQuery, setBaselineQuery] = useState<SuccessfulQuery | null>(null);
+  const snapshot = successfulQuery?.snapshot ?? null;
+  const snapshotEnvelope = successfulQuery?.envelope ?? null;
+  const result = successfulQuery?.result ?? null;
+  const resultStrategy = successfulQuery?.strategy ?? null;
+  const baselineResult = baselineQuery?.result ?? null;
+  const baselineStrategy = baselineQuery?.strategy ?? null;
+  const resultIsStale = Boolean(resultStrategy && JSON.stringify(resultStrategy) !== JSON.stringify(strategy));
   const [clarification, setClarification] = useState<Clarification | null>(null);
   const [pendingIntentContext, setPendingIntentContext] = useState<IntentContext | null>(null);
   const [canExecute, setCanExecute] = useState(true);
@@ -84,6 +91,7 @@ export function useCopilot(options: Options = {}) {
   const [previousVersionStrategy, setPreviousVersionStrategy] = useState<Strategy | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('included');
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [selectedQuery, setSelectedQuery] = useState<'current' | 'previous'>('current');
   const [compareCodes, setCompareCodes] = useState<[string | null, string | null]>([null, null]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,19 +199,17 @@ export function useCopilot(options: Options = {}) {
       const envelope = await (options.stockSearchRequest ?? requestStockSearch)(strategy);
       const activeSnapshot = dataSnapshotSchema.parse(envelope.snapshot);
       const next = screenUniverse(activeSnapshot, strategy);
-      setSnapshot(activeSnapshot); setSnapshotEnvelope(envelope);
-      setResult(next);
-      if (!baselineResult) {
-        setBaselineResult(next);
-        setBaselineStrategy(copyStrategy(strategy));
-      }
+      const query: SuccessfulQuery = { strategy: copyStrategy(strategy), snapshot: activeSnapshot, envelope, result: next };
+      setSuccessfulQuery(query);
+      if (!baselineQuery) setBaselineQuery(query);
+      setSelectedCode(null); setCompareCodes([null, null]);
       setPhase('results_ready');
     } catch (cause) {
       const message = errorText(cause); setError(message); setMessage(message, 'assistant', 'error');
       if (!draft.trim() && lastIntentQuery.current) setDraft(lastIntentQuery.current);
       setPhase('recoverable_error');
     } finally { setBusy(false); }
-  }, [baselineResult, canRun, draft, options.stockSearchRequest, setMessage, strategy]);
+  }, [baselineQuery, canRun, draft, options.stockSearchRequest, setMessage, strategy]);
   const setCompareCode = useCallback((slot: 0 | 1, code: string | null) => setCompareCodes((current) => {
     if (code && current[1 - slot] === code) return current;
     const next: [string | null, string | null] = [...current]; next[slot] = code; return next;
@@ -212,7 +218,7 @@ export function useCopilot(options: Options = {}) {
     try {
       const restored = storage.load(id);
       if (!restored) throw new Error('找不到已保存的策略。');
-      setStrategy(copyStrategy(restored, (strategy?.version ?? 0) + 1)); setSnapshot(null); setSnapshotEnvelope(null); setResult(null); setBaselineResult(null); setBaselineStrategy(null); setSelectedCode(null); setCompareCodes([null, null]); setClarification(null); setUnsupportedItems([]); setCanExecute(true); setPhase('strategy_ready'); setError(null); setMessage('已载入策略，请运行筛选以获取当前数据。', 'assistant');
+      setStrategy(copyStrategy(restored, (strategy?.version ?? 0) + 1)); setSuccessfulQuery(null); setBaselineQuery(null); setSelectedCode(null); setCompareCodes([null, null]); setClarification(null); setUnsupportedItems([]); setCanExecute(true); setPhase('strategy_ready'); setError(null); setMessage('已载入策略，请运行筛选以获取当前数据。', 'assistant');
     } catch (cause) { setError(errorText(cause)); }
   }, [setMessage, storage, strategy?.version]);
   const saveStrategy = useCallback((name?: string, id?: string) => {
@@ -238,13 +244,13 @@ export function useCopilot(options: Options = {}) {
   const removeCondition = useCallback((index: number) => updateStrategy((current) => ({ ...current, conditions: current.conditions.filter((_condition, i) => i !== index) })), [updateStrategy]);
 
   return {
-    phase, messages, draft, strategy, snapshot, snapshotEnvelope, result, baselineResult, previousStrategy: baselineStrategy, previousResult: baselineResult, mappings,
-    conflicts, clarification, unsupportedItems, activeTab, selectedCode, compareCodes, diff, busy, error,
+    phase, messages, draft, strategy, snapshot, snapshotEnvelope, result, resultStrategy, resultIsStale, successfulQuery, baselineResult, previousStrategy: baselineStrategy, previousResult: baselineResult, previousSnapshot: baselineQuery?.snapshot ?? null, mappings,
+    conflicts, clarification, unsupportedItems, activeTab, selectedCode, selectedQuery, compareCodes, diff, busy, error,
     actions: {
       setDraft, submitIntent, answerClarification, submitClarification, updateStrategy, updateCondition, updateConditionByField,
-      addCondition, removeCondition, fixConflict, runScreen, setActiveTab, selectStock: setSelectedCode,
+      addCondition, removeCondition, fixConflict, runScreen, setActiveTab, selectStock: (code: string, query: 'current' | 'previous' = 'current') => { setSelectedCode(code); setSelectedQuery(query); },
       setCompareCode, saveStrategy, loadStrategy, deleteStrategy, resetError: () => setError(null),
-      rebaseDiff: () => { if (result && strategy) { setBaselineResult(result); setBaselineStrategy(copyStrategy(strategy)); } },
+      rebaseDiff: () => { if (successfulQuery) setBaselineQuery(successfulQuery); },
       canRun, canSave: Boolean(strategy && strategy.name.trim() && conflicts.length === 0),
     },
     savedStrategies,

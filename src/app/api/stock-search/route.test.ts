@@ -49,4 +49,11 @@ describe('POST /api/stock-search', () => {
     expect(body).toContain('数据暂时不可用，请稍后重试。');
     expect(body).not.toContain('upstream secret payload');
   });
+
+  it('returns 503 with only the concise account notice for exhausted quota', async () => {
+    vi.mocked(fetchAshareCandidates).mockRejectedValue(new IfindError('private quota detail', 'quota_exhausted'));
+    const response = await POST(new Request('http://localhost/api/stock-search', { method: 'POST', body: JSON.stringify({ strategy }) }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: { code: 'data_unavailable', message: 'iFinD 账号调用额度已用完，当前无法获取实时数据。' } });
+  });
 });

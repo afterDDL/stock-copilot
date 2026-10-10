@@ -63,10 +63,40 @@ describe('CopilotWorkspace', () => {
     expect(document.body).not.toHaveTextContent(/internal_field|暂不支持「ROE」/);
   });
 
+  it('describes market-wide mixed-industry ranks as candidate positions', async () => {
+    const user = userEvent.setup();
+    const mixedSnapshot: DataSnapshot = { ...snapshot, stocks: snapshot.stocks.map((stock, index) => index === 0 ? stock : { ...stock, industry: '电子', metrics: { ...stock.metrics, industry: { ...stock.metrics.industry, value: '电子' } } }) };
+    const allMarket = { ...strategy, conditions: strategy.conditions.filter((item) => item.field !== 'industry') };
+    render(<CopilotWorkspace
+      intentRequest={async () => ({ strategy: allMarket, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true })}
+      stockSearchRequest={async () => ({ mode: 'live', snapshot: mixedSnapshot, coverage: mixedSnapshot.coverage, evidence: { source: 'iFinD', capturedAt: '2026-10-10T00:00:00Z', statisticDates: {}, liveRequests: 2 } })}
+    />);
+    await user.type(screen.getByRole('textbox', { name: '请输入选股需求' }), '市值至少1000亿元');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await user.click(await screen.findByRole('button', { name: '运行筛选' }));
+    expect(await screen.findByRole('columnheader', { name: '本次候选中的市值位置' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '研究辅助' })).toHaveTextContent('候选前30%');
+    expect(document.body).not.toHaveTextContent('同业');
+  });
+
+  it('renders industry concepts and unknown concepts without internal identifiers', async () => {
+    const user = userEvent.setup();
+    render(<CopilotWorkspace intentRequest={async () => ({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true, mappings: [
+      { originalExpression: '银行股', concept: 'industry_scope', field: 'industry', state: 'confirmed', action: 'condition', explanation: '按行业匹配。' },
+      { originalExpression: '其他要求', concept: 'provider_internal_concept', state: 'needs_clarification', action: 'clarify', explanation: '请补充条件。' },
+    ] })} />);
+    await user.type(screen.getByRole('textbox', { name: '请输入选股需求' }), '银行股');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    const panel = await screen.findByRole('region', { name: '意图映射' });
+    expect(panel).toHaveTextContent('行业范围 → 所属行业');
+    expect(panel).toHaveTextContent('筛选要求');
+    expect(panel).not.toHaveTextContent(/industry_scope|provider_internal_concept/);
+  });
+
   it('keeps the last successful result when a later search needs narrowing and hides the data boundary in details', async () => {
     const user = userEvent.setup();
     const stockSearchRequest = vi.fn()
-      .mockResolvedValueOnce({ mode: 'live', snapshot, coverage: snapshot.coverage, evidence: { source: 'fixture', capturedAt: '2026-10-10T00:00:00Z', statisticDates: {}, liveRequests: 2 } })
+      .mockResolvedValueOnce({ mode: 'live', snapshot, coverage: snapshot.coverage, evidence: { source: 'iFinD MCP search_stocks controlled single-indicator queries', capturedAt: '2026-10-10T00:00:00Z', statisticDates: {}, liveRequests: 2 } })
       .mockRejectedValueOnce(new Error('结果较多，请补充行业或提高筛选门槛。'));
     render(<CopilotWorkspace
       intentRequest={vi.fn().mockResolvedValue({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true })}
@@ -81,10 +111,41 @@ describe('CopilotWorkspace', () => {
     expect(screen.getByRole('button', { name: '查看数据来源详情' })).toHaveAttribute('aria-expanded', 'false');
     await user.click(screen.getByRole('button', { name: '查看数据来源详情' }));
     expect(document.body).toHaveTextContent('本次结果是条件检索返回的候选，不保证覆盖沪深北 A 股全部股票。');
+    expect(document.body).toHaveTextContent('数据来源：iFinD');
+    expect(document.body).not.toHaveTextContent(/MCP|search_stocks|实时查询步骤|ceil/);
+    await user.clear(screen.getByRole('spinbutton', { name: '总市值门槛（元）' }));
+    await user.type(screen.getByRole('spinbutton', { name: '总市值门槛（元）' }), '200000000000');
+    await user.selectOptions(screen.getByLabelText('利润增长排序'), 'asc');
     await user.click(screen.getByRole('button', { name: '运行筛选' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('结果较多，请补充行业或提高筛选门槛。');
     expect(within(screen.getByRole('table', { name: '入选股票列表' })).getByText('浦发银行')).toBeInTheDocument();
+    expect(screen.getByText('显示上次成功查询的结果；修改后的条件尚未取得新结果。')).toBeInTheDocument();
+    expect(screen.getByText('按归母净利润同比增长率由高到低')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '研究辅助' })).toHaveTextContent('达到 1,000 亿元');
     expect(stockSearchRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens the original named stock evidence when a fresh candidate query removes it', async () => {
+    const user = userEvent.setup();
+    const smallerSnapshot: DataSnapshot = { ...snapshot, snapshotId: 'smaller-snap', asOf: '2026-10-10', stocks: [], coverage: { expectedStocks: 0, returnedStocks: 0, complete: true, metrics: { industry: { available: 0, missing: 0 }, market_cap_cny: { available: 0, missing: 0 }, net_profit_parent_yoy_pct: { available: 0, missing: 0 } } } };
+    const wrap = (value: DataSnapshot) => ({ mode: 'live', snapshot: value, coverage: value.coverage, evidence: { source: 'fixture', capturedAt: '2026-10-10T00:00:00Z', statisticDates: {}, liveRequests: 2 } });
+    render(<CopilotWorkspace
+      intentRequest={async () => ({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true })}
+      stockSearchRequest={vi.fn().mockResolvedValueOnce(wrap(snapshot)).mockResolvedValueOnce(wrap(smallerSnapshot))}
+    />);
+    await user.type(screen.getByRole('textbox', { name: '请输入选股需求' }), '银行股');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await user.click(await screen.findByRole('button', { name: '运行筛选' }));
+    await screen.findByRole('table', { name: '入选股票列表' });
+    await user.clear(screen.getByRole('spinbutton', { name: '总市值门槛（元）' }));
+    await user.type(screen.getByRole('spinbutton', { name: '总市值门槛（元）' }), '200000000000');
+    await user.click(screen.getByRole('button', { name: '运行筛选' }));
+    const changes = await screen.findByRole('region', { name: '筛选变化' });
+    await user.click(within(changes).getByRole('button', { name: /浦发银行.*600000.*剔除/ }));
+    const evidence = screen.getByRole('dialog', { name: '股票证据：浦发银行' });
+    expect(evidence).toHaveTextContent('比较基准查询 · 策略版本 1 · 数据日期 2026-10-09');
+    expect(evidence).toHaveTextContent('门槛 1000 亿元');
+    expect(evidence).not.toHaveTextContent('门槛 2000 亿元');
   });
 
   it('shows distinct result tabs and opens condition evidence for a selected stock', async () => {
@@ -205,10 +266,15 @@ describe('CopilotWorkspace', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
     expect(await screen.findByRole('region', { name: '意图映射' })).toHaveTextContent('盘子大一点');
     expect(screen.getByRole('region', { name: '意图映射' })).toHaveTextContent('产品预设：1000亿元');
+    expect(screen.getByRole('region', { name: '意图映射' })).toHaveTextContent('公司规模 → 总市值');
+    expect(screen.getByRole('region', { name: '意图映射' })).not.toHaveTextContent(/company_size|market_cap_cny/);
     await user.click(screen.getByRole('button', { name: '运行筛选' }));
     expect(await screen.findByRole('heading', { name: '条件匹配' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '偏好排序' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '研究辅助' })).toHaveTextContent('样本');
+    expect(screen.getByRole('region', { name: '研究辅助' })).toHaveTextContent('候选前30%');
+    expect(screen.getByRole('columnheader', { name: '本次候选中的市值位置' })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('同业');
     expect(screen.getByText('条件匹配和排序不等于投资价值判断')).toBeInTheDocument();
   });
 });

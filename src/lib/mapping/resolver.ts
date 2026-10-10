@@ -2,6 +2,7 @@ import type { Condition, ConditionOperator, Indicator, Strategy } from '../domai
 import { detectConflicts } from '../engine/conflicts';
 import { conceptDefinition, companySizeDefault, isMetricExecutable, metricDefinition } from './registry';
 import type { ConditionMapping, MappingState, ResolvedIntent } from './types';
+import { extractIndustryFromQuery } from './industry';
 export type { ConditionMapping, MappingAction, MappingState, ResolvedIntent } from './types';
 type ResolveOptions = { currentStrategy?: Strategy; previousStrategy?: Strategy };
 type Amount = { value: number; start: number; end: number; text: string };
@@ -35,23 +36,6 @@ function amountValues(query: string): Amount[] {
 }
 function dateFor(field: Indicator): string | null {
   return field === 'industry' ? null : field === 'market_cap_cny' ? '2026-10-09' : '2026-06-30';
-}
-function normalizeIndustryExpression(expression: string): string {
-  return expression.trim().replace(/(?:行业|板块|股)$/u, '').trim();
-}
-function requestedIndustry(query: string): string | null {
-  if (/取消行业(?:限制|筛选)|不限制行业|不看行业|全\s*A股|全市场|沪深北\s*A股/i.test(query)) return null;
-  const direct = query.match(/(?:改成|换成|限定为|只看)([^，。；、]+)/u)?.[1];
-  if (direct) return normalizeIndustryExpression(direct);
-  for (const match of query.matchAll(/([\p{Script=Han}\p{L}\p{N}·]+?)(?:行业|板块|股)/gu)) {
-    const candidate = normalizeIndustryExpression(match[0] ?? '');
-    if (candidate && !/^(?:沪深北)?A$/i.test(candidate)) return candidate;
-  }
-  const explicit = query.match(/(?:筛选|寻找|找)([^，。；、]+)$/u)?.[1];
-  if (explicit && !/(?:总市值|市值|利润|业绩|收益|股价|涨幅|回报)/.test(explicit)) {
-    return normalizeIndustryExpression(explicit);
-  }
-  return null;
 }
 function unsupportedCopy(request: string): string {
   return `暂不支持“${request}”指标查询。`;
@@ -158,7 +142,7 @@ export function resolveIntent(query: string, candidateStrategy: Strategy, option
   if (/取消行业(?:限制|筛选)|不限制行业|不看行业|全\s*A股|全市场|沪深北\s*A股/i.test(normalized)) {
     removeField('industry');
   } else {
-    const industry = requestedIndustry(normalized);
+    const industry = extractIndustryFromQuery(normalized);
     if (industry) {
       const item: Condition = {
         field: 'industry', operator: 'eq', value: industry, unit: '行业', statisticDate: null,

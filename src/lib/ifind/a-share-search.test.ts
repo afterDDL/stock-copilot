@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Strategy } from '../domain/types';
-import { AshareSearchError, SnapshotError } from './errors';
+import { AshareSearchError } from './errors';
+import { IfindMcpClient } from './client';
 import { buildSearchQueries, fetchAshareCandidates } from './a-share-search';
 
 const strategy: Strategy = {
@@ -24,6 +25,23 @@ function clientFor(results: string[]) {
 }
 
 describe('A-share controlled search', () => {
+  it.each([
+    ['market cap only', strategy.conditions.filter((item) => item.field === 'market_cap_cny')],
+    ['profit only', strategy.conditions.filter((item) => item.field === 'net_profit_parent_yoy_pct')],
+    ['industry only', strategy.conditions.filter((item) => item.field === 'industry')],
+    ['bounded all-market', strategy.conditions.filter((item) => item.field !== 'industry')],
+  ])('parses both fixed indicators through the real client for %s', async (_label, conditions) => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), { headers: { 'Mcp-Session-Id': 'test-session' } }))
+      .mockResolvedValueOnce(new Response('{}'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ jsonrpc: '2.0', id: 2, result: { content: [{ type: 'text', text: cap(rowsCap) }] } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ jsonrpc: '2.0', id: 3, result: { content: [{ type: 'text', text: profit(rowsProfit) }] } })));
+    const client = new IfindMcpClient({ token: 'test-token', fetch: fetcher as typeof fetch });
+    const { snapshot } = await fetchAshareCandidates({ ...strategy, conditions }, client);
+    expect(snapshot.stocks.map((stock) => stock.code)).toEqual(['300001', '688001']);
+    expect(snapshot.stocks[0].metrics.market_cap_cny.value).toBe(12_000_000_000);
+    expect(snapshot.stocks[0].metrics.net_profit_parent_yoy_pct.value).toBe(12.5);
+  });
   it('builds two single-indicator queries with identical scope and hard filters', () => {
     const [capQuery, profitQuery] = buildSearchQueries(strategy);
     const shared = '电子';
@@ -88,7 +106,7 @@ describe('A-share controlled search', () => {
       cap('| 688001.SH | 华兴源创 | 电子-半导体 | 260亿股本 |'),
       profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85% |'),
     ]);
-    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({ code: 'invalid_market_cap_unit_annotation' });
+    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({ code: 'needs_narrowing', reasonCode: 'invalid_market_cap_unit_annotation' });
   });
 
   it('classifies unsupported profit-growth units without exposing metric text', async () => {
@@ -96,7 +114,7 @@ describe('A-share controlled search', () => {
       cap('| 688001.SH | 华兴源创 | 电子-半导体 | 260亿元 |'),
       profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85亿元 |'),
     ]);
-    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({ code: 'invalid_profit_growth_unit' });
+    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({ code: 'needs_narrowing', reasonCode: 'invalid_profit_growth_unit' });
   });
 
   it('projects allow-listed fields while ignoring unrelated provider columns', async () => {
@@ -111,7 +129,7 @@ describe('A-share controlled search', () => {
   it('classifies a missing required metric column without exposing response content', async () => {
     const wrongMetric = '| 股票代码 | 股票简称 | 所属同花顺行业 | 市值[20261009] |\n|---|---|---|---:|\n| 688001.SH | 华兴源创 | 电子-半导体 | 26030422168.8 |';
     const client = clientFor([wrongMetric, profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85 |')]);
-    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({ code: 'missing_metric_column' });
+    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({ code: 'needs_narrowing', reasonCode: 'missing_metric_column' });
   });
 
   it('accepts another supported indicator when it is also a strategy condition', async () => {
@@ -123,11 +141,12 @@ describe('A-share controlled search', () => {
     expect(snapshot.stocks[0]?.metrics.market_cap_cny.value).toBe(26_030_422_168.8);
   });
 
-  it('rejects a supported indicator that is not part of the strategy', async () => {
+  it('accepts the fixed display indicators without requiring financial hard conditions', async () => {
     const capOnlyStrategy = { ...strategy, conditions: strategy.conditions.filter((item) => item.field !== 'net_profit_parent_yoy_pct') };
     const twoIndicators = '| 股票代码 | 股票简称 | 所属同花顺行业 | 总市值[20261009] | 归属于母公司所有者的净利润同比增长率[20260630] |\n|---|---|---|---:|---:|\n| 688001.SH | 华兴源创 | 电子-半导体 | 26030422168.8 | 20.85 |';
     const client = clientFor([twoIndicators, profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85 |')]);
-    await expect(fetchAshareCandidates(capOnlyStrategy, client as never)).rejects.toMatchObject({ code: 'unsolicited_indicator_column' });
+    const { snapshot } = await fetchAshareCandidates(capOnlyStrategy, client as never);
+    expect(snapshot.stocks[0].metrics.net_profit_parent_yoy_pct.value).toBe(20.85);
   });
 
   it('keeps a sanitized reason code when broad or truncated coverage needs narrowing', async () => {
@@ -142,11 +161,11 @@ describe('A-share controlled search', () => {
     ['more than 100 rows', cap(Array.from({ length: 101 }, (_, i) => `| ${String(i).padStart(6, '0')} | 名称${i} | 电子 | 10000000001 |`).join('\n')), profit(rowsProfit), AshareSearchError],
     ['duplicate codes', cap(`${rowsCap}\n| 300001.SH | 重复 | 电子 | 12000000000 |`), profit(rowsProfit), AshareSearchError],
     ['different code sets', cap(rowsCap), profit('| 300001.SZ | 特锐德 | 电力设备-电网设备 | 12.5 |'), AshareSearchError],
-    ['wrong columns', '| 股票代码 | 股票简称 | 所属同花顺行业 | 市值[20261009] |\n|---|---|---|---|\n| 300001.SZ | 特锐德 | 电子 | 12000000000 |', profit(rowsProfit), SnapshotError],
-    ['identity mismatch', cap(rowsCap), profit('| 300001.SZ | 错误名称 | 电力设备-电网设备 | 12.5 |\n| 688001.SH | 华兴源创 | 电子-半导体 | 2 |'), SnapshotError],
-    ['invalid units', cap('| 300001.SZ | 特锐德 | 电力设备 | 12% |'), profit('| 300001.SZ | 特锐德 | 电力设备 | 1% |'), SnapshotError],
-    ['invalid dates', cap('| 股票代码 | 股票简称 | 所属同花顺行业 | 总市值[20261340] |\n|---|---|---|---|\n| 300001.SZ | 特锐德 | 电力设备 | 12 |'), profit(rowsProfit), SnapshotError],
-    ['empty content', '', profit(rowsProfit), SnapshotError],
+    ['wrong columns', '| 股票代码 | 股票简称 | 所属同花顺行业 | 市值[20261009] |\n|---|---|---|---|\n| 300001.SZ | 特锐德 | 电子 | 12000000000 |', profit(rowsProfit), AshareSearchError],
+    ['identity mismatch', cap(rowsCap), profit('| 300001.SZ | 错误名称 | 电力设备-电网设备 | 12.5 |\n| 688001.SH | 华兴源创 | 电子-半导体 | 2 |'), AshareSearchError],
+    ['invalid units', cap('| 300001.SZ | 特锐德 | 电力设备 | 12% |'), profit('| 300001.SZ | 特锐德 | 电力设备 | 1% |'), AshareSearchError],
+    ['invalid dates', cap('| 股票代码 | 股票简称 | 所属同花顺行业 | 总市值[20261340] |\n|---|---|---|---|\n| 300001.SZ | 特锐德 | 电力设备 | 12 |'), profit(rowsProfit), AshareSearchError],
+    ['empty content', '', profit(rowsProfit), AshareSearchError],
   ])('rejects %s instead of returning partial candidates', async (_label, capText, profitText, errorType) => {
     const client = clientFor([capText, profitText]);
     await expect(fetchAshareCandidates(strategy, client as never)).rejects.toBeInstanceOf(errorType);

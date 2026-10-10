@@ -120,17 +120,6 @@ function parsedQuery(markdown: string, field: typeof CAP | typeof PROFIT, strate
       throw new SnapshotError('iFinD returned a duplicate identity column.', `duplicate_${role}_column`);
     }
   }
-  const strategyIndicators = new Set(strategy.conditions
-    .filter((condition) => condition.field !== 'industry')
-    .map((condition) => condition.field));
-  for (const header of table.headers) {
-    if ([CAP_LABEL, PROFIT_LABEL].some((candidate) => header === candidate || header.startsWith(`${candidate}[`))) {
-      const indicator = header.startsWith(CAP_LABEL) ? CAP : PROFIT;
-      if (!strategyIndicators.has(indicator)) {
-        throw new SnapshotError('iFinD returned an indicator that is not part of the strategy.', 'unsolicited_indicator_column');
-      }
-    }
-  }
   for (const metricLabel of [CAP_LABEL, PROFIT_LABEL]) {
     if (table.headers.filter((header) => header === metricLabel || header.startsWith(`${metricLabel}[`)).length > 1) {
       throw new SnapshotError('iFinD returned a duplicate financial indicator column.', 'duplicate_indicator_column');
@@ -191,7 +180,7 @@ export async function fetchAshareCandidates(strategy: Strategy, client?: IfindMc
     if (!parsed.success) throw new SnapshotError('Normalized iFinD candidates failed validation.', 'invalid_snapshot');
     return { snapshot: parsed.data, evidence: { source: SOURCE, capturedAt, statisticDates: { marketCap: cap.date, netProfitYoy: profit.date }, liveRequests: 2 } };
   } catch (error) {
-    if (error instanceof SnapshotError && ['truncated_content', 'coverage_mismatch', 'duplicate_rows'].includes(error.code)) {
+    if (error instanceof SnapshotError) {
       throw new AshareSearchError(error.code);
     }
     throw error;

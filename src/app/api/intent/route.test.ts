@@ -12,6 +12,23 @@ afterEach(() => {
 });
 
 describe('POST /api/intent', () => {
+  it.each([
+    ['筛选人工智能行业股票', '人工智能'],
+    ['找电子行业且市值至少100亿元', '电子'],
+  ])('keeps a correctly parsed industry through the complete intent chain: %s', async (query, industry) => {
+    process.env.DEEPSEEK_API_KEY = 'test-secret';
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'completed', output_text: JSON.stringify({
+      condition_changes: [{ field: 'industry', operator: 'eq', value: industry, unit: '行业', action: 'upsert', source_expression: industry + '行业', ai_inferred: false, editable: true }],
+      sort_direction: null, assumptions: [], clarifications: [], unsupported_requests: [],
+    }) })));
+    const response = await POST(new Request('http://localhost/api/intent', { method: 'POST', body: JSON.stringify({ query }) }));
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.intent.strategy.conditions.find((item: { field: string }) => item.field === 'industry')?.value).toBe(industry);
+    expect(body.intent.canExecute).toBe(true);
+    expect(body.intent.unsupportedRequests).toEqual([]);
+  });
   it('returns a validated strategy intent without exposing provider credentials', async () => {
     process.env.DEEPSEEK_API_KEY = 'test-secret';
     vi.stubGlobal('fetch', fetchMock);

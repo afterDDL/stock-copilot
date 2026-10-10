@@ -24,6 +24,12 @@ const mappingStateLabel: Record<ConditionMapping['state'], string> = {
 const mappingFieldLabel: Record<string, string> = {
   industry: '所属行业', market_cap_cny: '总市值', net_profit_parent_yoy_pct: '归母净利润同比增长率',
 };
+const mappingConceptLabel: Record<string, string> = {
+  industry_scope: '行业范围', company_size: '公司规模', profit_growth: '利润增长',
+  valuation: '估值', financial_stability: '财务稳健', business_improvement: '经营改善',
+  market_momentum: '市场表现', profitability: '盈利能力', price_stability: '股价稳定',
+  strategy_version: '策略版本', strategy_patch: '条件调整',
+};
 
 function MappingPanel({ mappings }: { mappings: ConditionMapping[] }) {
   if (!mappings.length) return null;
@@ -31,7 +37,7 @@ function MappingPanel({ mappings }: { mappings: ConditionMapping[] }) {
     <div className="section-heading"><div><p className="eyebrow">原话 · 金融概念 · 可执行字段</p><h2>意图映射</h2></div></div>
     <div className="mapping-list">{mappings.map((mapping, index) => <article className="mapping-item" key={mapping.originalExpression + mapping.concept + index}>
       <div className="mapping-item-heading"><strong>“{mapping.originalExpression}”</strong><span className={'mapping-state mapping-' + mapping.state}>{mappingStateLabel[mapping.state]}</span></div>
-      <p>{mapping.concept + (mapping.field ? ' → ' + (mappingFieldLabel[mapping.field] ?? mapping.field) : '') + (mapping.unit ? ' · ' + mapping.unit : '') + (mapping.statisticDate ? ' · ' + mapping.statisticDate : '')}</p>
+      <p>{(mappingConceptLabel[mapping.concept] ?? '筛选要求') + (mapping.field ? ' → ' + (mappingFieldLabel[mapping.field] ?? '筛选条件') : '') + (mapping.unit ? ' · ' + mapping.unit : '') + (mapping.statisticDate ? ' · ' + mapping.statisticDate : '')}</p>
       <span>{mapping.explanation}</span>
       {mapping.defaultSource && <small>默认来源：{mapping.defaultSource}</small>}
     </article>)}</div>
@@ -73,9 +79,9 @@ export function CopilotWorkspace({ intentRequest, stockSearchRequest, storage }:
   const rename = (name: string) => update((current) => ({ ...current, name }));
   const conditionChange = (index: number, patch: Partial<Condition>) => state.actions.updateCondition(index, patch);
   const sortDirection = (direction: 'asc' | 'desc') => update((current) => ({ ...current, sort: { ...current.sort, direction } }));
-  const handleSelectStock = (code: string) => {
+  const handleSelectStock = (code: string, query: 'current' | 'previous' = 'current') => {
     if (code) evidenceTrigger.current = document.activeElement as HTMLElement;
-    state.actions.selectStock(code);
+    state.actions.selectStock(code, query);
     if (!code) requestAnimationFrame(() => evidenceTrigger.current?.focus());
   };
   const handleCompare = (slot: 0 | 1, code: string | null) => {
@@ -98,7 +104,7 @@ export function CopilotWorkspace({ intentRequest, stockSearchRequest, storage }:
           }); }} />
           {state.unsupportedItems.length > 0 && <section className="card unsupported-card" aria-labelledby="unsupported-heading"><h2 id="unsupported-heading">暂不支持的要求</h2>{state.unsupportedItems.map((item, index) => <p key={`${item.request}-${index}`}>暂不支持“{item.request}”指标查询。</p>)}</section>}
         </div>
-        <div id="research" className="research-column"><ResultsWorkspace result={state.result} previousResult={state.previousResult} snapshot={state.snapshot} snapshotEnvelope={state.snapshotEnvelope} activeTab={state.activeTab} selectedCode={state.selectedCode} comparingCodes={state.compareCodes} diff={state.diff} previousStrategy={state.previousStrategy} currentStrategy={state.strategy} onTabChange={state.actions.setActiveTab} onSelectStock={handleSelectStock} onCompareSlotChange={handleCompare} onRebase={state.actions.rebaseDiff} /></div>
+        <div id="research" className="research-column"><ResultsWorkspace result={state.result} previousResult={state.previousResult} previousSnapshot={state.previousSnapshot} snapshot={state.snapshot} snapshotEnvelope={state.snapshotEnvelope} activeTab={state.activeTab} selectedCode={state.selectedCode} selectedQuery={state.selectedQuery} comparingCodes={state.compareCodes} diff={state.diff} previousStrategy={state.previousStrategy} currentStrategy={state.resultStrategy} resultIsStale={state.resultIsStale} onTabChange={state.actions.setActiveTab} onSelectStock={handleSelectStock} onCompareSlotChange={handleCompare} onRebase={state.actions.rebaseDiff} /></div>
       </div>
       <div className="live-announcer" aria-live="polite" aria-atomic="true">{state.busy && state.phase === 'data_loading' ? '正在查询沪深北 A 股。' : state.result ? `筛选完成，入选 ${state.result.included.length} 只，排除 ${state.result.excluded.length} 只，无法判定 ${state.result.unknown.length} 只。` : ''}</div>
     </main>
