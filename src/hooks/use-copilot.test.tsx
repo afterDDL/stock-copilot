@@ -211,6 +211,50 @@ describe('useCopilot', () => {
     expect(result.current.error).not.toContain('internal truncation detail');
   });
 
+  it('keeps the first successful result as the comparison baseline after submitting a changed intent', async () => {
+    const changedStrategy = { ...strategy, conditions: strategy.conditions.map((condition) => condition.field === 'market_cap_cny' ? { ...condition, value: 200_000_000_000 } : condition) };
+    const intentRequest = vi.fn()
+      .mockResolvedValueOnce({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true })
+      .mockResolvedValueOnce({ strategy: changedStrategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
+    const stockSearchRequest = vi.fn().mockResolvedValueOnce(envelope(snapshot)).mockResolvedValueOnce(envelope({ ...snapshot, snapshotId: 'snapshot-2' }));
+    const { result } = renderHook(() => useCopilot({ intentRequest, stockSearchRequest }));
+
+    act(() => result.current.actions.setDraft('找市值至少1000亿元的股票'));
+    await act(async () => result.current.actions.submitIntent());
+    await act(async () => result.current.actions.runScreen());
+    const firstResult = result.current.result;
+    act(() => result.current.actions.setDraft('提高门槛到2000亿元'));
+    await act(async () => result.current.actions.submitIntent());
+    expect(result.current.result).toBe(firstResult);
+    await act(async () => result.current.actions.runScreen());
+
+    expect(result.current.previousResult).toBe(firstResult);
+    expect(result.current.result?.included).toHaveLength(0);
+    expect(result.current.diff).toMatchObject({ added: [], retained: [], removed: ['600000'] });
+  });
+
+  it('keeps the first result visible and restores the changed-intent draft when its search fails', async () => {
+    const changedStrategy = { ...strategy, conditions: strategy.conditions.map((condition) => condition.field === 'market_cap_cny' ? { ...condition, value: 200_000_000_000 } : condition) };
+    const intentRequest = vi.fn()
+      .mockResolvedValueOnce({ strategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true })
+      .mockResolvedValueOnce({ strategy: changedStrategy, assumptions: [], clarifications: [], unsupportedRequests: [], canExecute: true });
+    const stockSearchRequest = vi.fn().mockResolvedValueOnce(envelope(snapshot)).mockRejectedValueOnce(new Error('结果较多，请补充行业或提高筛选门槛。'));
+    const { result } = renderHook(() => useCopilot({ intentRequest, stockSearchRequest }));
+
+    act(() => result.current.actions.setDraft('找市值至少1000亿元的股票'));
+    await act(async () => result.current.actions.submitIntent());
+    await act(async () => result.current.actions.runScreen());
+    const firstResult = result.current.result;
+    act(() => result.current.actions.setDraft('提高门槛到2000亿元'));
+    await act(async () => result.current.actions.submitIntent());
+    await act(async () => result.current.actions.runScreen());
+
+    expect(result.current.result).toBe(firstResult);
+    expect(result.current.snapshot?.snapshotId).toBe(snapshot.snapshotId);
+    expect(result.current.draft).toBe('提高门槛到2000亿元');
+    expect(result.current.error).toBe('结果较多，请补充行业或提高筛选门槛。');
+  });
+
   it('restores a saved strategy without carrying a stale snapshot or screening result', async () => {
     const storage = { list: () => [], save: vi.fn(), load: vi.fn().mockReturnValue(strategy), delete: vi.fn() };
     const { result } = renderHook(() => useCopilot({

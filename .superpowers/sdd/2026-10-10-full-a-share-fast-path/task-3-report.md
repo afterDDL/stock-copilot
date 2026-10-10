@@ -20,3 +20,10 @@
 
 - The UI does not claim that a returned candidate set exhausts the market. The quick path cannot detect silent omissions by the upstream service; it only rejects truncation, over-limit responses, code-set mismatches, and parse failures detected by Task 2.
 - This task's verification used controlled test responses. It did not perform live iFinD smoke queries, browser E2E, or a production build; those belong to Task 4's handoff verification.
+
+## Review fix (round 1)
+
+- Changed intent responses now preserve the last successful snapshot, result, and comparison baseline. A later successful search replaces the visible result and computes its diff against that baseline; a failed search leaves the earlier result in place.
+- If a stock search fails while the composer is empty, the hook restores the last accepted natural-language query to the draft. If the user already has draft text, it is left intact.
+- Added both requested hook regressions. They failed before the fix because applying the changed intent cleared `result`; after the fix the focused hook/component suite passes: 2 files, 23 tests.
+- `npm run typecheck` — passed.

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dataSnapshotSchema, strategySchema } from '../lib/domain/schema';
 import type { Condition, DataSnapshot, ScreeningDiff, ScreeningResult, Strategy, StrategyConflict } from '../lib/domain/types';
 import { detectConflicts } from '../lib/engine/conflicts';
@@ -63,6 +63,7 @@ function copyStrategy(strategy: Strategy, version = strategy.version): Strategy 
 }
 
 export function useCopilot(options: Options = {}) {
+  const lastIntentQuery = useRef('');
   const storage = useMemo(() => options.storage ?? createStrategyStorage(), [options.storage]);
   const [savedStrategies, setSavedStrategies] = useState<SavedStrategySummary[]>([]);
   const [savedStrategyWarning, setSavedStrategyWarning] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export function useCopilot(options: Options = {}) {
   }, []);
   const applyIntentResponse = useCallback((response: IntentEnvelope, context: IntentContext, priorStrategy?: Strategy) => {
     const safeStrategy = strategySchema.parse(response.strategy);
+    lastIntentQuery.current = context.originalQuery;
     setStrategy(copyStrategy(safeStrategy));
     setCanExecute(response.canExecute);
     setUnsupportedItems(response.unsupportedRequests ?? []);
@@ -122,7 +124,7 @@ export function useCopilot(options: Options = {}) {
       setMessage('策略已准备好，你可以检查并编辑条件。', 'assistant');
       setPhase('strategy_ready');
     }
-    setSnapshot(null); setSnapshotEnvelope(null); setResult(null); setBaselineResult(null); setSelectedCode(null); setCompareCodes([null, null]); setBaselineStrategy(null);
+    setSelectedCode(null); setCompareCodes([null, null]);
   }, [previousVersionStrategy, setMessage]);
   const submitIntent = useCallback(async () => {
     const query = draft.trim();
@@ -197,9 +199,11 @@ export function useCopilot(options: Options = {}) {
       }
       setPhase('results_ready');
     } catch (cause) {
-      const message = errorText(cause); setError(message); setMessage(message, 'assistant', 'error'); setPhase('recoverable_error');
+      const message = errorText(cause); setError(message); setMessage(message, 'assistant', 'error');
+      if (!draft.trim() && lastIntentQuery.current) setDraft(lastIntentQuery.current);
+      setPhase('recoverable_error');
     } finally { setBusy(false); }
-  }, [baselineResult, canRun, options.stockSearchRequest, setMessage, strategy]);
+  }, [baselineResult, canRun, draft, options.stockSearchRequest, setMessage, strategy]);
   const setCompareCode = useCallback((slot: 0 | 1, code: string | null) => setCompareCodes((current) => {
     if (code && current[1 - slot] === code) return current;
     const next: [string | null, string | null] = [...current]; next[slot] = code; return next;
