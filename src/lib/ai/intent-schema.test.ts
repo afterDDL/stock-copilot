@@ -226,6 +226,16 @@ describe('parseIntentOutput', () => {
     expect(JSON.stringify(result.unsupportedRequests)).not.toMatch(/market_cap_cny|net_profit_parent_yoy_pct|Schema/i);
   });
 
+  it('drops a standalone generic modifier mistakenly returned as an unsupported metric', () => {
+    const result = parseIntentOutput('找利润增长更高的股票', {
+      ...emptyDelta,
+      unsupported_requests: [{ request: '高', reason: '暂不支持。' }],
+    }, null);
+
+    expect(result.unsupportedRequests).toEqual([]);
+    expect(result.canExecute).toBe(true);
+  });
+
   it('replaces internal field identifiers if the model returns one as an unsupported request', () => {
     const result = parseIntentOutput('沪深北股票', {
       ...emptyDelta,

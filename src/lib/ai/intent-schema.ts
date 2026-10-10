@@ -157,9 +157,10 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
   if (!parsed.success) throw new IntentOutputError('schema_invalid', 'DeepSeek intent did not match the required schema.');
   const delta = parsed.data;
   const conditions = defaultConditions(query, currentStrategy);
-  const unsupportedRequests = delta.unsupported_requests.map(({ request }) => {
-    const label = userRequestLabel(request);
-    return { request: label, reason: unsupportedCopy(label) };
+  const unsupportedRequests = delta.unsupported_requests.flatMap(({ request }) => {
+    const label = userRequestLabel(request).trim();
+    if (/^(?:高|低|好|差|大|小|快|慢|强|弱)$/.test(label)) return [];
+    return [{ request: label, reason: unsupportedCopy(label) }];
   });
   for (const change of delta.condition_changes) {
     const index = conditions.findIndex((condition) => condition.field === change.field);

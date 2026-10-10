@@ -31,6 +31,7 @@ const snapshot: DataSnapshot = {
 describe('CopilotWorkspace', () => {
   it('opens on the full A-share market with the requested example and no bank-only product copy', () => {
     render(<CopilotWorkspace />);
+    expect(screen.getByRole('note')).toHaveTextContent('iFinD 账号调用额度已用完，当前无法获取实时数据。');
     expect(screen.getAllByText('沪深北 A 股').length).toBeGreaterThan(0);
     expect(screen.getByText('描述你想找的股票')).toBeInTheDocument();
     expect(screen.getByText('找市值较大、利润仍在增长的股票，增长更快的优先。')).toBeInTheDocument();

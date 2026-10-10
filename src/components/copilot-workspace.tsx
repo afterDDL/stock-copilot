@@ -92,6 +92,7 @@ export function CopilotWorkspace({ intentRequest, stockSearchRequest, storage }:
     <header className="topbar"><a href="#top" className="brand-mark" aria-label="选股 coPilot 首页"><span className="brand-icon">◈</span><span>选股 <strong>coPilot</strong></span></a><div className="header-right"><span className="header-context">研究工作台</span><SavedStrategies entries={state.savedStrategies} canSave={state.actions.canSave} warning={state.savedStrategyWarning} onSave={state.actions.saveStrategy} onLoad={state.actions.loadStrategy} onDelete={state.actions.deleteStrategy} /></div></header>
     <main id="top" className="workspace-main">
       <div className="welcome-heading"><div><p className="eyebrow">选股 coPilot · 沪深北 A 股</p><h1>把想法，变成可验证的筛选。</h1><p className="welcome-copy">用自然语言开始，再检查条件、数据和每只股票的入选依据。</p></div><span className="scope-note">沪深北 A 股</span></div>
+      <div className="quota-notice" role="note"><span aria-hidden="true">!</span><p>iFinD 账号调用额度已用完，当前无法获取实时数据。</p></div>
       <nav className="mobile-sections" aria-label="工作区章节">{sections.map((section) => <a key={section.id} href={`#${section.id}`} aria-current={currentSection === section.id ? 'location' : undefined} onClick={() => setCurrentSection(section.id)}>{section.label}</a>)}</nav>
       <div className="workspace-grid">
         <div className="conversation-column">
