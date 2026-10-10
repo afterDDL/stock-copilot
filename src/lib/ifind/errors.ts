@@ -22,6 +22,15 @@ export class IfindError extends Error {
   }
 }
 
+export class AshareSearchError extends Error {
+  readonly code = 'needs_narrowing';
+
+  constructor() {
+    super('Candidate search requires narrower conditions.');
+    this.name = 'AshareSearchError';
+  }
+}
+
 export function safeErrorDetails(error: unknown): { code: string; message: string; retryable: boolean } {
   if (error instanceof SnapshotError || error instanceof IfindError) {
     const code = /^[a-z][a-z0-9_]{0,47}$/.test(error.code) ? error.code : 'snapshot_unavailable';

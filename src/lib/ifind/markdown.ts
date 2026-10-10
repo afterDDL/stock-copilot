@@ -10,6 +10,7 @@ export interface ParsedTable {
 export function parseMarkdownTable(
   markdown: string,
   columns: Record<string, string[]>,
+  options: { allowEmptyRows?: boolean; allowEmptyMetric?: boolean } = {},
 ): ParsedTable {
   if (typeof markdown !== 'string' || !markdown.trim()) {
     throw new SnapshotError('iFinD returned empty table content.', 'empty_content');
@@ -60,12 +61,15 @@ export function parseMarkdownTable(
   for (const line of lines.slice(separatorIndex + 1)) {
     if (!line.endsWith('|')) throw new SnapshotError('iFinD table content is truncated.', 'truncated_content');
     const cells = splitRow(line);
-    if (cells.length !== headers.length || cells.some((cell) => cell === '')) {
+    const metricColumns = options.allowEmptyMetric
+      ? new Set((columns.metric ?? []).flatMap((prefix) => headers.filter((header) => header === prefix || header.startsWith(`${prefix}[`))))
+      : new Set<string>();
+    if (cells.length !== headers.length || cells.some((cell, index) => cell === '' && !metricColumns.has(headers[index]))) {
       throw new SnapshotError('iFinD table content is truncated or has inconsistent columns.', 'truncated_content');
     }
     rows.push(Object.fromEntries(headers.map((header, index) => [header, cells[index]])));
   }
-  if (rows.length === 0) throw new SnapshotError('iFinD returned an empty result table.', 'empty_content');
+  if (rows.length === 0 && !options.allowEmptyRows) throw new SnapshotError('iFinD returned an empty result table.', 'empty_content');
   if (reportedRows !== undefined && rows.length !== reportedRows) {
     throw new SnapshotError('iFinD table row count does not match its reported coverage.', 'coverage_mismatch');
   }
