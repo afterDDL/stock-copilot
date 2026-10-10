@@ -74,13 +74,75 @@ describe('A-share controlled search', () => {
     expect(snapshot.stocks[0].metrics.net_profit_parent_yoy_pct.value).toBe(12.5);
   });
 
+  it('normalizes iFinD market-cap shorthand units to yuan', async () => {
+    const client = clientFor([
+      cap('| 688001.SH | 华兴源创 | 电子-半导体 | 260.304221688亿 |'),
+      profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85% |'),
+    ]);
+    const { snapshot } = await fetchAshareCandidates(strategy, client as never);
+    expect(snapshot.stocks[0]?.metrics.market_cap_cny.value).toBeCloseTo(26_030_422_168.8, 4);
+  });
+
+  it('classifies unsupported market-cap units without exposing metric text', async () => {
+    const client = clientFor([
+      cap('| 688001.SH | 华兴源创 | 电子-半导体 | 260亿股本 |'),
+      profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85% |'),
+    ]);
+    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({ code: 'invalid_market_cap_unit_annotation' });
+  });
+
+  it('classifies unsupported profit-growth units without exposing metric text', async () => {
+    const client = clientFor([
+      cap('| 688001.SH | 华兴源创 | 电子-半导体 | 260亿元 |'),
+      profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85亿元 |'),
+    ]);
+    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({ code: 'invalid_profit_growth_unit' });
+  });
+
+  it('projects allow-listed fields while ignoring unrelated provider columns', async () => {
+    const extraColumn = '| 股票代码 | 股票简称 | 所属同花顺行业 | 总市值[20261009] | 备注 |\n|---|---|---|---:|---|\n| 688001.SH | 华兴源创 | 电子-半导体 | 26030422168.8 | 示例 |';
+    const client = clientFor([extraColumn, profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85 |')]);
+    const { snapshot } = await fetchAshareCandidates(strategy, client as never);
+    expect(snapshot.stocks).toHaveLength(1);
+    expect(snapshot.stocks[0]).toMatchObject({ code: '688001', name: '华兴源创', industry: '电子-半导体' });
+    expect(snapshot.stocks[0]?.metrics.market_cap_cny.value).toBe(26_030_422_168.8);
+  });
+
+  it('classifies a missing required metric column without exposing response content', async () => {
+    const wrongMetric = '| 股票代码 | 股票简称 | 所属同花顺行业 | 市值[20261009] |\n|---|---|---|---:|\n| 688001.SH | 华兴源创 | 电子-半导体 | 26030422168.8 |';
+    const client = clientFor([wrongMetric, profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85 |')]);
+    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({ code: 'missing_metric_column' });
+  });
+
+  it('accepts another supported indicator when it is also a strategy condition', async () => {
+    const twoIndicators = '| 股票代码 | 股票简称 | 所属同花顺行业 | 总市值[20261009] | 归属于母公司所有者的净利润同比增长率[20260630] |\n|---|---|---|---:|---:|\n| 688001.SH | 华兴源创 | 电子-半导体 | 26030422168.8 | 20.85 |';
+    const client = clientFor([twoIndicators, profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85 |')]);
+    const { snapshot } = await fetchAshareCandidates(strategy, client as never);
+    expect(snapshot.stocks).toHaveLength(1);
+    expect(snapshot.stocks[0]).toMatchObject({ code: '688001', name: '华兴源创', industry: '电子-半导体' });
+    expect(snapshot.stocks[0]?.metrics.market_cap_cny.value).toBe(26_030_422_168.8);
+  });
+
+  it('rejects a supported indicator that is not part of the strategy', async () => {
+    const capOnlyStrategy = { ...strategy, conditions: strategy.conditions.filter((item) => item.field !== 'net_profit_parent_yoy_pct') };
+    const twoIndicators = '| 股票代码 | 股票简称 | 所属同花顺行业 | 总市值[20261009] | 归属于母公司所有者的净利润同比增长率[20260630] |\n|---|---|---|---:|---:|\n| 688001.SH | 华兴源创 | 电子-半导体 | 26030422168.8 | 20.85 |';
+    const client = clientFor([twoIndicators, profit('| 688001.SH | 华兴源创 | 电子-半导体 | 20.85 |')]);
+    await expect(fetchAshareCandidates(capOnlyStrategy, client as never)).rejects.toMatchObject({ code: 'unsolicited_indicator_column' });
+  });
+
+  it('keeps a sanitized reason code when broad or truncated coverage needs narrowing', async () => {
+    const client = clientFor([cap(`${rowsCap}\n\nShowing 2 of 150 rows`), profit(rowsProfit)]);
+    await expect(fetchAshareCandidates(strategy, client as never)).rejects.toMatchObject({
+      code: 'needs_narrowing', reasonCode: 'truncated_content',
+    });
+  });
+
   it.each([
     ['truncation marker', cap(`${rowsCap}\n\nShowing 2 of 150 rows`), profit(rowsProfit), AshareSearchError],
     ['more than 100 rows', cap(Array.from({ length: 101 }, (_, i) => `| ${String(i).padStart(6, '0')} | 名称${i} | 电子 | 10000000001 |`).join('\n')), profit(rowsProfit), AshareSearchError],
     ['duplicate codes', cap(`${rowsCap}\n| 300001.SH | 重复 | 电子 | 12000000000 |`), profit(rowsProfit), AshareSearchError],
     ['different code sets', cap(rowsCap), profit('| 300001.SZ | 特锐德 | 电力设备-电网设备 | 12.5 |'), AshareSearchError],
     ['wrong columns', '| 股票代码 | 股票简称 | 所属同花顺行业 | 市值[20261009] |\n|---|---|---|---|\n| 300001.SZ | 特锐德 | 电子 | 12000000000 |', profit(rowsProfit), SnapshotError],
-    ['additional indicator column', '| 股票代码 | 股票简称 | 所属同花顺行业 | 总市值[20261009] | 归属于母公司所有者的净利润同比增长率[20260630] |\n|---|---|---|---|---|\n| 300001.SZ | 特锐德 | 电力设备 | 12000000000 | 1 |', profit('| 300001.SZ | 特锐德 | 电力设备 | 1 |'), SnapshotError],
     ['identity mismatch', cap(rowsCap), profit('| 300001.SZ | 错误名称 | 电力设备-电网设备 | 12.5 |\n| 688001.SH | 华兴源创 | 电子-半导体 | 2 |'), SnapshotError],
     ['invalid units', cap('| 300001.SZ | 特锐德 | 电力设备 | 12% |'), profit('| 300001.SZ | 特锐德 | 电力设备 | 1% |'), SnapshotError],
     ['invalid dates', cap('| 股票代码 | 股票简称 | 所属同花顺行业 | 总市值[20261340] |\n|---|---|---|---|\n| 300001.SZ | 特锐德 | 电力设备 | 12 |'), profit(rowsProfit), SnapshotError],

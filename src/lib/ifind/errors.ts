@@ -24,10 +24,12 @@ export class IfindError extends Error {
 
 export class AshareSearchError extends Error {
   readonly code = 'needs_narrowing';
+  readonly reasonCode: string;
 
-  constructor() {
+  constructor(reasonCode = 'unknown') {
     super('Candidate search requires narrower conditions.');
     this.name = 'AshareSearchError';
+    this.reasonCode = reasonCode;
   }
 }
 

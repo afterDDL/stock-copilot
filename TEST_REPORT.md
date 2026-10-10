@@ -6,25 +6,27 @@
 
 | 项目 | 命令 / 操作 | 结果 | 证据 / 限制 |
 |---|---|---|---|
-| Vitest 全量 | `npm test` | 通过 | 19 个测试文件，168 项通过。 |
+| Vitest 全量 | `npm test` | 通过 | 19 个测试文件，175 项通过。 |
 | 类型检查 | `npm run typecheck` | 通过 | `tsc --noEmit` 退出状态 0。 |
 | 生产构建 | `npm run build` | 通过 | Next.js 16.4.0；页面和 `/api/intent`、`/api/bank-snapshot`、`/api/stock-search` 路由生成成功。 |
 | 浏览器端到端 | `npm run test:e2e -- --workers=1` | 通过 | 8/8；覆盖条件编辑与差异、逐股证据、冲突修正、澄清、比较、保存/刷新恢复、不支持指标、无行业市场策略、非银行行业条件和宽请求提示。接口数据使用确定性 Playwright mock。 |
 | 桌面与窄屏视觉 | Playwright 截图检查 | 通过 | 1440×1000 与 390×844；主要内容可见，窄屏按对话/策略/结果纵向排列，未见横向溢出。 |
-| 真实 iFinD smoke | 本地生产服务 `POST /api/stock-search` | 失败 | 下表记录 3 个真实查询。服务端公开业务码均为 `data_unavailable`，没有返回候选行；路由未暴露更底层 iFinD 错误码。 |
+| 真实 iFinD smoke | 本地生产服务 `POST /api/stock-search` + 脱敏 `fetchAshareCandidates` 探针 | 未通过 | 三类策略均未返回候选。MCP HTTP 可达，但工具返回被解析为 `truncated_content`；API 复测为 `needs_narrowing` / `data_unavailable`。 |
 | 云端/Vercel iFinD | 未执行 | 尚未验证 | 本轮没有云端请求证据。 |
 
 ## 真实 iFinD smoke 明细
 
-正常成功路径会为每个策略发出 2 个 iFinD `search_stocks` 单指标查询。本轮通过本地生产服务对 3 种策略各发起一次真实 `POST /api/stock-search`；HTTP 与业务状态来自实际 API 响应。因 API 未暴露上游调用计数，无法确认每次失败前实际完成了几个 MCP 调用。响应中没有 `snapshot`，所以候选行数为 0（不是零只符合条件，而是没有可用数据结果）。耗时包含本地 API 与其上游等待。
+以下 API 数值是 parser 修复后的复测，响应没有 `snapshot`，因此候选行数 0 表示没有可用数据结果，不代表零只符合条件。另用只记录 MCP 阶段 HTTP 状态、耗时和安全错误分类的临时探针直接调用 `fetchAshareCandidates`；它不输出凭证、请求头、session 或原始 MCP 内容。
 
 | 策略 | HTTP | 业务码 | 候选行数 | 耗时 | 错误分类 |
 |---|---:|---|---:|---:|---|
-| 电子行业；总市值 ≥ 500 亿元；归母净利润同比 > 0% | 503 | `data_unavailable` | 0 | 2634 ms | 实时数据服务不可用；路由未透出 iFinD MCP 内层分类。 |
-| 电力设备行业；总市值 ≥ 500 亿元；归母净利润同比 > 0% | 503 | `data_unavailable` | 0 | 1751 ms | 实时数据服务不可用；路由未透出 iFinD MCP 内层分类。 |
-| 无行业；总市值 ≥ 5000 亿元；归母净利润同比 > 0%（有界全市场策略） | 503 | `data_unavailable` | 0 | 1734 ms | 实时数据服务不可用；路由未透出 iFinD MCP 内层分类。 |
+| 电子-半导体；总市值 ≥ 200 亿元；归母净利润同比 > 0% | 422 | `needs_narrowing` | 0 | 560 ms | 底层直接探针：MCP initialize / notification / tool_call 均 HTTP 200；业务解析 `AshareSearchError/truncated_content`。 |
+| 电力设备；总市值 ≥ 10000 亿元；归母净利润同比 > 0% | 503 | `data_unavailable` | 0 | 716 ms | 底层直接探针同样归类为 `truncated_content`；API 不暴露该 503 的内层分类。 |
+| 无行业；总市值 ≥ 50000 亿元；归母净利润同比 > 10%（有界全市场策略） | 503 | `data_unavailable` | 0 | 702 ms | 底层直接探针同样归类为 `truncated_content`；API 不暴露该 503 的内层分类。 |
 
-这三次请求均真实到达本地 API，但没有任何一次证明上游查询成功；当前真实数据验收未通过。API 只对外返回通用 `data_unavailable`，本报告不推断授权、限流、超时或上游业务错误中的具体原因。凭证值、Authorization 头和 session 标识未输出或记录。
+为确认过滤条件是否能消除截断，另试总市值 ≥ 1000 万亿元且净利润同比 > 1000% 的明显极窄策略；该直接请求仍返回 `truncated_content`（MCP 各阶段 HTTP 200，约 2434 ms）。三类目标策略直接探针也均在 tool_call HTTP 200 后得到 `truncated_content`，耗时约 721、2424、2409 ms。证据指向上游返回内容/查询执行的截断边界，而非 HTTP 不可达；不能据此断言上游筛选条件被忽略，亦不能把它归为授权问题。真实数据验收仍未通过。
+
+三次请求真实到达本地 API，但未产生候选数据；HTTP 业务状态在复测中不一致，MCP 传输阶段为 HTTP 200。只有直接解析层安全分类可确认 `truncated_content`；对于 API 返回的 `data_unavailable`，内层原因仍不可见，不推断为授权、限流或超时。凭证值、Authorization 头和 session 标识未输出或记录。
 
 ## 结果边界与覆盖
 

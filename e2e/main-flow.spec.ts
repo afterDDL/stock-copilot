@@ -52,7 +52,26 @@ function strategy(conditions = [
 
 function liveEnvelope(industry?: string) {
   const snapshot = structuredClone(snapshotEnvelope.snapshot);
-  if (industry) {
+  if (industry === '电子-半导体') {
+    snapshot.snapshotId = 'ifind-electronics-e2e';
+    snapshot.source = 'live';
+    snapshot.stocks = [{
+      code: '688001', name: '华兴源创', industry,
+      metrics: {
+        industry: { value: industry, unit: '行业', date: null, source: 'live', coverage: 'available' },
+        market_cap_cny: { value: 26_030_422_168.8, unit: '元', date: '2026-10-09', source: 'live', coverage: 'available' },
+        net_profit_parent_yoy_pct: { value: 20.85, unit: '%', date: '2026-06-30', source: 'live', coverage: 'available' },
+      },
+    }];
+    snapshot.coverage = {
+      expectedStocks: 1, returnedStocks: 1, complete: true,
+      metrics: {
+        industry: { available: 1, missing: 0 },
+        market_cap_cny: { available: 1, missing: 0 },
+        net_profit_parent_yoy_pct: { available: 1, missing: 0 },
+      },
+    };
+  } else if (industry) {
     for (const stock of snapshot.stocks) {
       stock.industry = industry;
       stock.metrics.industry.value = industry;
@@ -88,10 +107,10 @@ function strategyForQuery(query: string) {
       condition('net_profit_parent_yoy_pct', 'gt', 0, '归母净利润同比增长率大于0%'),
     ]);
   }
-  if (/电子行业/u.test(query)) {
+  if (/电子半导体行业/u.test(query)) {
     return strategy([
-      condition('industry', 'eq', '电子', '电子行业'),
-      condition('market_cap_cny', 'gte', 100_000_000_000, '总市值至少1000亿元'),
+      condition('industry', 'eq', '电子-半导体', '电子半导体行业'),
+      condition('market_cap_cny', 'gte', 20_000_000_000, '总市值至少200亿元'),
       condition('net_profit_parent_yoy_pct', 'gt', 0, '归母净利润同比增长率大于0%'),
     ]);
   }
@@ -297,16 +316,19 @@ test('runs bounded market-wide and explicit non-bank searches through POST /api/
   await page.getByRole('button', { name: '查看数据来源详情' }).click();
   await expect(page.locator('#source-details')).toContainText('本次结果是条件检索返回的候选，不保证覆盖沪深北 A 股全部股票。');
 
-  await submitIntent(page, '筛选电子行业股票，总市值至少1000亿元且利润同比增长');
+  await submitIntent(page, '筛选电子半导体行业股票，总市值至少200亿元且利润同比增长');
   const industryRequest = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/stock-search');
   await runScreen(page);
   const industryPost = await industryRequest;
   expect(industryPost.method()).toBe('POST');
   expect((industryPost.postDataJSON() as { strategy: { conditions: Condition[] } }).strategy.conditions)
-    .toContainEqual(expect.objectContaining({ field: 'industry', value: '电子' }));
-  await expect(page.getByRole('row').nth(1)).toContainText('宁波银行');
-  await page.getByRole('row').nth(1).getByRole('button', { name: '宁波银行' }).click();
-  await expect(page.getByRole('dialog')).toContainText('所属行业');
+    .toContainEqual(expect.objectContaining({ field: 'industry', value: '电子-半导体' }));
+  await expect(page.getByRole('row').nth(1)).toContainText('华兴源创');
+  await expect(page.getByRole('row').nth(1)).toContainText('688001');
+  await expect(page.getByRole('row').nth(1)).toContainText('260.3 亿元');
+  await expect(page.getByRole('row').nth(1)).toContainText('20.85%');
+  await page.getByRole('row').nth(1).getByRole('button', { name: '华兴源创' }).click();
+  await expect(page.getByRole('dialog')).toContainText('电子-半导体');
 });
 
 test('shows the concise narrowing message when broad candidate search is rejected', async ({ page }) => {

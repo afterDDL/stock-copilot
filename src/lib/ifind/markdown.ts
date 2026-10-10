@@ -53,7 +53,13 @@ export function parseMarkdownTable(
   }
   for (const [role, choices] of Object.entries(columns)) {
     if (!headers.some((header) => choices.some((choice) => header === choice || (role === 'metric' && header.startsWith(`${choice}[`))))) {
-      throw new SnapshotError(`iFinD table is missing the expected ${role} column.`, 'wrong_columns');
+      const roleCode: Record<string, string> = {
+        code: 'missing_code_column',
+        name: 'missing_name_column',
+        industry: 'missing_industry_column',
+        metric: 'missing_metric_column',
+      };
+      throw new SnapshotError(`iFinD table is missing the expected ${role} column.`, roleCode[role] ?? 'missing_required_column');
     }
   }
 

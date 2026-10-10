@@ -12,8 +12,8 @@
 
 - Playwright 拦截接口从旧银行快照 GET 更新为 `POST /api/stock-search`，增加无行业有界策略、明确电子行业策略、阈值编辑与结果差异、证据、比较、策略保存/重开及宽查询提示覆盖。
 - E2E 返回数据为确定性 mock；没有以 mock 结果代替真实 iFinD 证明。
-- 当前验证：Vitest 19 个文件/168 项、TypeScript、生产构建和 Playwright E2E 8/8 均通过。桌面 1440×1000、窄屏 390×844 截图检查通过。
-- 真实 iFinD smoke 发出电子、电力设备和无行业有界全市场 3 种策略请求，HTTP 均为 503，业务码均为 `data_unavailable`，耗时约 1.7–2.6 秒，没有候选行；路由未暴露 iFinD MCP 内层错误分类。详情见 `TEST_REPORT.md` 与 Task 4 报告。
+- 当前验证：Vitest 19 个文件/175 项、TypeScript、生产构建和 Playwright E2E 8/8 均通过。桌面 1440×1000、窄屏 390×844 截图检查通过。
+- Task 4 review 修复了实际 schema 宽列、双指标响应、市场总值单位后缀及 safe reason 分类，并将电子行业 E2E fixture 改为电子半导体上市公司华兴源创（688001）。真实 iFinD 验收仍未通过：三类目标请求的直接脱敏探针都是 MCP 各阶段 HTTP 200、业务解析 `truncated_content`；API 复测返回 `422 needs_narrowing` 或 `503 data_unavailable`，无候选快照。详情见 `TEST_REPORT.md` 和 Task 4 报告。
 
 ## 数据与验证纪律
 

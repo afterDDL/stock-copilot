@@ -78,15 +78,24 @@ function numeric(raw: string, field: typeof CAP | typeof PROFIT): number | null 
   const value = raw.trim();
   if (!value || /^(?:--|—|-|N\/A|NA|暂无|不适用)$/i.test(value)) return null;
   if (field === CAP) {
-    const match = value.replace(/,/g, '').match(/^([+-]?(?:\d+\.?\d*|\.\d+))\s*(元|万元|亿元)?$/);
-    if (!match) throw new SnapshotError('iFinD returned a market capitalization with an invalid unit.', 'invalid_metric_unit');
-    const multiplier = match[2] === '亿元' ? 100_000_000 : match[2] === '万元' ? 10_000 : 1;
+    const match = value.replace(/,/g, '').match(/^([+-]?(?:\d+\.?\d*|\.\d+))\s*(万亿元|万亿|万元|亿元|亿|元)?$/);
+    if (!match) {
+      const numericPrefix = value.replace(/,/g, '').match(/^[+-]?(?:\d+\.?\d*|\.\d+)/);
+      const suffix = numericPrefix ? value.replace(/,/g, '').slice(numericPrefix[0].length).trim() : '';
+      const knownUnitPrefix = /^(?:万亿元|万亿|万元|亿元|亿|元)/u.test(suffix);
+      const code = !numericPrefix ? 'invalid_market_cap_format'
+        : knownUnitPrefix ? 'invalid_market_cap_unit_annotation' : 'invalid_market_cap_suffix';
+      throw new SnapshotError('iFinD returned a market capitalization in an unsupported format.', code);
+    }
+    const multiplier = match[2] === '万亿元' || match[2] === '万亿' ? 1_000_000_000_000
+      : match[2] === '亿元' || match[2] === '亿' ? 100_000_000
+        : match[2] === '万元' ? 10_000 : 1;
     const result = Number(match[1]) * multiplier;
     if (!Number.isFinite(result)) throw new SnapshotError('iFinD returned an invalid market capitalization.', 'invalid_metric');
     return result;
   }
   const match = value.replace(/,/g, '').match(/^([+-]?(?:\d+\.?\d*|\.\d+))\s*%?$/);
-  if (!match) throw new SnapshotError('iFinD returned profit growth with an invalid unit.', 'invalid_metric_unit');
+  if (!match) throw new SnapshotError('iFinD returned profit growth with an invalid unit.', 'invalid_profit_growth_unit');
   const result = Number(match[1]);
   if (!Number.isFinite(result)) throw new SnapshotError('iFinD returned invalid profit growth.', 'invalid_metric');
   return result;
@@ -106,10 +115,30 @@ function rowsByCode(rows: Array<Record<string, string>>, field: typeof CAP | typ
 function parsedQuery(markdown: string, field: typeof CAP | typeof PROFIT, strategy: Strategy) {
   const label = field === CAP ? CAP_LABEL : PROFIT_LABEL;
   const table = parseMarkdownTable(markdown, columns(label), { allowEmptyRows: true, allowEmptyMetric: true });
-  if (table.headers.length !== 4) throw new SnapshotError('iFinD returned unexpected columns for a single-indicator query.', 'wrong_columns');
+  for (const [header, role] of [[CODE, 'code'], [NAME, 'name'], [INDUSTRY, 'industry']] as const) {
+    if (table.headers.filter((candidate) => candidate === header).length > 1) {
+      throw new SnapshotError('iFinD returned a duplicate identity column.', `duplicate_${role}_column`);
+    }
+  }
+  const strategyIndicators = new Set(strategy.conditions
+    .filter((condition) => condition.field !== 'industry')
+    .map((condition) => condition.field));
+  for (const header of table.headers) {
+    if ([CAP_LABEL, PROFIT_LABEL].some((candidate) => header === candidate || header.startsWith(`${candidate}[`))) {
+      const indicator = header.startsWith(CAP_LABEL) ? CAP : PROFIT;
+      if (!strategyIndicators.has(indicator)) {
+        throw new SnapshotError('iFinD returned an indicator that is not part of the strategy.', 'unsolicited_indicator_column');
+      }
+    }
+  }
+  for (const metricLabel of [CAP_LABEL, PROFIT_LABEL]) {
+    if (table.headers.filter((header) => header === metricLabel || header.startsWith(`${metricLabel}[`)).length > 1) {
+      throw new SnapshotError('iFinD returned a duplicate financial indicator column.', 'duplicate_indicator_column');
+    }
+  }
   if (table.rows.length > 100 || (table.reportedRows ?? 0) > 100) throw new SnapshotError('iFinD returned more than 100 candidate rows.', 'coverage_mismatch');
   const column = table.headers.filter((header) => header === label || header.startsWith(`${label}[`));
-  if (column.length !== 1) throw new SnapshotError(`Expected one ${label} column.`, 'wrong_columns');
+  if (column.length !== 1) throw new SnapshotError('iFinD returned an ambiguous indicator column.', 'ambiguous_metric_column');
   const expectedDate = strategy.conditions.find((condition) => condition.field === field)?.statisticDate ?? null;
   const date = validDate(column[0], label, expectedDate);
   return { rows: rowsByCode(table.rows, field), date };
@@ -163,7 +192,7 @@ export async function fetchAshareCandidates(strategy: Strategy, client?: IfindMc
     return { snapshot: parsed.data, evidence: { source: SOURCE, capturedAt, statisticDates: { marketCap: cap.date, netProfitYoy: profit.date }, liveRequests: 2 } };
   } catch (error) {
     if (error instanceof SnapshotError && ['truncated_content', 'coverage_mismatch', 'duplicate_rows'].includes(error.code)) {
-      throw new AshareSearchError();
+      throw new AshareSearchError(error.code);
     }
     throw error;
   }
