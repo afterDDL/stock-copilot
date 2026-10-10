@@ -20,24 +20,28 @@ describe('strategy schemas', () => {
     ).toBe(false);
   });
 
-  it('requires strategy identity and a supported bank-industry condition', () => {
+  it('accepts an all-market strategy without an industry condition', () => {
     expect(strategySchema.safeParse({
       id: 'strategy-1',
       version: 1,
-      name: '稳健银行股',
-      industry: 'bank',
+      name: '全市场大市值股票',
+      market: 'cn_a',
+      conditions: [marketCapCondition],
+      sort: { field: 'net_profit_parent_yoy_pct', direction: 'desc' },
+    }).success).toBe(true);
+  });
+
+  it('accepts arbitrary exact industry names while preserving the three-field whitelist', () => {
+    expect(strategySchema.safeParse({
+      id: 'strategy-2', version: 1, name: '人工智能行业股票', market: 'cn_a',
       conditions: [
-        { field: 'industry', operator: 'eq', value: '银行', unit: '行业', statisticDate: null,
-          sourceExpression: '同花顺行业', aiInferred: false, editable: false },
+        { field: 'industry', operator: 'eq', value: '人工智能', unit: '行业', statisticDate: null,
+          sourceExpression: '人工智能行业', aiInferred: false, editable: true },
         marketCapCondition,
       ],
       sort: { field: 'net_profit_parent_yoy_pct', direction: 'desc' },
     }).success).toBe(true);
-    expect(strategySchema.safeParse({
-      id: 'strategy-2', version: 1, name: '无行业条件', industry: 'bank',
-      conditions: [marketCapCondition],
-      sort: { field: 'net_profit_parent_yoy_pct', direction: 'desc' },
-    }).success).toBe(false);
+    expect(conditionSchema.safeParse({ ...marketCapCondition, field: 'roe' }).success).toBe(false);
     expect(strategySchema.safeParse({ conditions: [marketCapCondition] }).success).toBe(false);
   });
 

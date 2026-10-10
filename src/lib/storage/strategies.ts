@@ -27,14 +27,23 @@ function read(storage: Pick<Storage, 'getItem'>): { entries: SavedStrategySummar
     let parsed: unknown;
     try { parsed = JSON.parse(raw); }
     catch { return { entries: [], warning: '已保存的策略格式无效，已忽略这些数据。' }; }
-    const envelope = envelopeSchema.safeParse(parsed);
-    if (envelope.success) return { entries: envelope.data.entries, warning: null };
     if (parsed && typeof parsed === 'object' && 'entries' in parsed && Array.isArray(parsed.entries)) {
       if (!('schemaVersion' in parsed) || parsed.schemaVersion !== 1) return { entries: [], warning: '已保存策略来自不支持的格式版本，已忽略这些数据。' };
-      const results = parsed.entries.map((entry) => entrySchema.safeParse(entry));
+      const results = parsed.entries.map((entry) => {
+        if (!entry || typeof entry !== 'object' || !('strategy' in entry) || !entry.strategy || typeof entry.strategy !== 'object') {
+          return entrySchema.safeParse(entry);
+        }
+        const legacy = entry.strategy as Record<string, unknown>;
+        if (legacy.industry !== 'bank' || 'market' in legacy) return entrySchema.safeParse(entry);
+        const { industry: _legacyIndustry, ...legacyFields } = legacy;
+        const upgraded = { ...entry, strategy: { ...legacyFields, market: 'cn_a' } };
+        return entrySchema.safeParse(upgraded);
+      });
       const entries = results.filter((entry) => entry.success).map((entry) => entry.data);
       return { entries, warning: entries.length === results.length ? null : '部分已保存策略无效，已忽略无效项目。' };
     }
+    const envelope = envelopeSchema.safeParse(parsed);
+    if (envelope.success) return { entries: envelope.data.entries, warning: null };
     return { entries: [], warning: '已保存的策略格式无效，已忽略这些数据。' };
   } catch {
     return { entries: [], warning: '本地保存暂不可用，已保存的策略无法读取。' };

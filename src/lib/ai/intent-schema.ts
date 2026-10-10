@@ -20,8 +20,8 @@ const conditionChangeSchema = z.object({
   if (isIndustry !== (typeof change.value === 'string')) {
     context.addIssue({ code: 'custom', path: ['value'], message: 'Value type does not match field.' });
   }
-  if (isIndustry && (change.operator !== 'eq' || change.action === 'remove')) {
-    context.addIssue({ code: 'custom', path: ['operator'], message: 'Bank industry cannot be changed or removed.' });
+  if (isIndustry && change.operator !== 'eq') {
+    context.addIssue({ code: 'custom', path: ['operator'], message: 'Industry only supports exact equality.' });
   }
 });
 
@@ -52,7 +52,7 @@ export class IntentOutputError extends Error {
 const freshCondition = (field: Indicator, value: number | string, operator: Condition['operator'], sourceExpression: string, aiInferred: boolean): Condition => ({
   field,
   operator,
-  value,
+  value: field === 'industry' ? normalizeIndustryExpression(String(value)) : value,
   unit: INDICATOR_META[field].unit,
   statisticDate: field === 'industry' ? null : field === 'market_cap_cny' ? '2026-10-09' : '2026-06-30',
   sourceExpression,
@@ -61,9 +61,9 @@ const freshCondition = (field: Indicator, value: number | string, operator: Cond
 });
 
 const defaultConditions = (query: string, strategy: Strategy | null): Condition[] => {
-  const conditions = strategy?.conditions.map((condition) => ({ ...condition })) ?? [
-    freshCondition('industry', '银行', 'eq', '银行股基础范围', false),
-  ];
+  const conditions = strategy?.conditions.map((condition) => ({ ...condition })) ?? [];
+  const queryIndustry = extractIndustryFromQuery(query);
+  if (!strategy && queryIndustry) conditions.push(freshCondition('industry', queryIndustry, 'eq', queryIndustry, false));
   if (/盘子大|大盘/.test(query) && !conditions.some((condition) => condition.field === 'market_cap_cny')) {
     conditions.push(freshCondition('market_cap_cny', 100000000000, 'gte', '盘子大（默认按总市值≥1000亿元）', true));
   }
@@ -104,20 +104,47 @@ const numericAmount = '[+-]?\\d+(?:\\.\\d+)?';
 const threshold = (unit: string) => `(?:${numericComparator}|提高到|降低到|调整到|改为|设为)?\\s*${numericAmount}\\s*(?:${unit})(?:以上|以下)?`;
 const marketCapLanguage = new RegExp(`(?:总市值|大市值|市值|盘子大|盘子|大盘)(?:门槛|阈值|条件)?(?:\\s*(?:${threshold('万亿元|万亿|亿元|亿|万元|元')}|(?:比较|相对|较为|非常|偏|较|更|很)?(?:大|小)))?`, 'g');
 const profitGrowthLanguage = new RegExp(`(?:${profitGrowthAliases.join('|')})(?:门槛|阈值|条件)?(?:\\s*(?:${threshold('%|％|百分比')}|越高越好|从高到低(?:排序|排列)?|降序(?:排序|排列)?|排序|排列|优先|(?:比较|相对|较为|非常|偏|较|更|很)?(?:高|低)|为正|正增长))?`, 'g');
-const bankLanguage = /(?:银行行业|银行业|银行股|银行|所属行业|行业)/g;
-const requestScaffolding = /(?:请帮我|帮我|请|我想要|我想|我要|寻找|找|按照|根据|按|进行|筛选|选出|选择|选股|选|些|还在|仍在|依然|把|将|门槛|阈值|条件|指标|取消|删除|移除|保留|股票|个股|并且|而且|以及|并|且|和|与|及|的|中|里)/g;
+const allMarketLanguage = /(?:沪深北\s*A股|沪深北A股|全市场|全A股|A股|所属行业|行业|板块)/g;
+const requestScaffolding = /(?:请帮我|帮我|请|我想要|我想|我要|寻找|找|按照|根据|按|进行|筛选|选出|选择|选股|选|些|还在|仍在|依然|把|将|门槛|阈值|条件|指标|限制|取消|删除|移除|保留|股票|个股|并且|而且|以及|并|且|和|与|及|的|中|里)/g;
 
 function detectUncoveredCriteria(query: string): string[] {
   // Spaces preserve boundaries, so separated fragments cannot accidentally
   // combine into a recognized alias after another field has been consumed.
+  const industry = extractIndustryFromQuery(query);
   const residual = query.normalize('NFKC')
     .replace(marketCapLanguage, ' ')
     .replace(profitGrowthLanguage, ' ')
     .replace(/(?:归母净利润|净利润|业绩|利润)还在增长|(?:归母净利润|净利润|利润)仍在增长|利润增长越快越好/g, ' ')
     .replace(/越快越好/g, ' ')
-    .replace(bankLanguage, ' ')
+    .replace(/行业|板块|银行股|股票|沪深北|A股/gu, ' ')
+    .replace(industry ?? '\u0000', ' ')
+    .replace(allMarketLanguage, ' ')
     .replace(requestScaffolding, ' ');
   return [...new Set(residual.split(/[\s\p{P}]+/u).filter(Boolean))];
+}
+
+function normalizeIndustryExpression(expression: string): string {
+  return expression.trim().replace(/(?:行业|板块|股)$/u, '').trim();
+}
+
+function extractIndustryFromQuery(query: string): string | null {
+  const matches = query.normalize('NFKC').matchAll(/([\p{Script=Han}\p{L}\p{N}·]+?)(?:行业|板块|股)/gu);
+  for (const match of matches) {
+    const candidate = normalizeIndustryExpression(match[0] ?? '');
+    if (candidate && !/^(?:沪深北)?A$/i.test(candidate)) return candidate;
+  }
+  return null;
+}
+
+function unsupportedCopy(request: string): string {
+  return `暂不支持“${request}”指标查询。`;
+}
+
+function userRequestLabel(request: string): string {
+  return request
+    .replaceAll('industry', INDICATOR_META.industry.label)
+    .replaceAll('market_cap_cny', INDICATOR_META.market_cap_cny.label)
+    .replaceAll('net_profit_parent_yoy_pct', INDICATOR_META.net_profit_parent_yoy_pct.label);
 }
 
 function extractExplicitMarketCap(query: string): { value: number; operator: Condition['operator'] } | null {
@@ -141,15 +168,13 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
   if (!parsed.success) throw new IntentOutputError('schema_invalid', 'DeepSeek intent did not match the required schema.');
   const delta = parsed.data;
   const conditions = defaultConditions(query, currentStrategy);
-  const unsupportedRequests = [...delta.unsupported_requests];
+  const unsupportedRequests = delta.unsupported_requests.map(({ request }) => {
+    const label = userRequestLabel(request);
+    return { request: label, reason: unsupportedCopy(label) };
+  });
   for (const change of delta.condition_changes) {
-    if (change.field === 'industry' && change.action === 'upsert' && change.value !== '银行') {
-      unsupportedRequests.push({ request: String(change.value), reason: '当前基础股票池限定为银行股，不能更改为其他行业。' });
-      continue;
-    }
     const index = conditions.findIndex((condition) => condition.field === change.field);
     if (change.action === 'remove') {
-      if (change.field === 'industry') continue;
       if (index >= 0) conditions.splice(index, 1);
       continue;
     }
@@ -157,7 +182,7 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
     const condition: Condition = {
       field: change.field,
       operator: change.operator,
-      value: change.value,
+      value: change.field === 'industry' ? normalizeIndustryExpression(String(change.value)) : change.value,
       unit: change.unit,
       statisticDate: previous?.statisticDate ?? (change.field === 'industry' ? null : change.field === 'market_cap_cny' ? '2026-10-09' : '2026-06-30'),
       sourceExpression: change.source_expression,
@@ -166,6 +191,16 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
     };
     if (index >= 0) conditions[index] = condition;
     else conditions.push(condition);
+  }
+  if (/取消行业(?:限制|筛选)|不限制行业|不看行业|全\s*A股|全市场|沪深北\s*A股/i.test(query)) {
+    for (let index = conditions.length - 1; index >= 0; index -= 1) {
+      if (conditions[index]?.field === 'industry') conditions.splice(index, 1);
+    }
+  } else if (!currentStrategy) {
+    const queryIndustry = extractIndustryFromQuery(query);
+    if (queryIndustry && !conditions.some((condition) => condition.field === 'industry')) {
+      conditions.unshift(freshCondition('industry', queryIndustry, 'eq', queryIndustry, false));
+    }
   }
   if (/盘子大|大盘/.test(query)) {
     const index = conditions.findIndex((condition) => condition.field === 'market_cap_cny');
@@ -193,21 +228,19 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
     if (index >= 0) conditions[index] = { ...condition, statisticDate: conditions[index].statisticDate };
     else conditions.push(condition);
   }
-  if (!conditions.some((condition) => condition.field === 'industry' && condition.value === '银行')) {
-    conditions.unshift(freshCondition('industry', '银行', 'eq', '银行股基础范围', false));
-  }
   const hasProfitCondition = conditions.some((condition) => condition.field === 'net_profit_parent_yoy_pct');
   const strategy = strategySchema.parse({
-    id: currentStrategy?.id ?? 'bank-screening',
+    id: currentStrategy?.id ?? 'a-share-screening',
     version: currentStrategy ? currentStrategy.version + 1 : 1,
-    name: currentStrategy?.name ?? '银行股筛选',
-    industry: 'bank',
+    name: currentStrategy?.name ?? '沪深北 A 股选股',
+    market: 'cn_a',
     conditions,
     sort: { field: 'net_profit_parent_yoy_pct', direction: hasProfitCondition ? 'desc' : (delta.sort_direction ?? 'desc') },
   });
   for (const criterion of detectUncoveredCriteria(query)) {
-    if (!unsupportedRequests.some(({ request }) => request === criterion)) {
-      unsupportedRequests.push({ request: criterion, reason: '该要求未被当前支持的语言覆盖；仅支持银行行业、总市值和归母净利润同比增长率。' });
+    const label = userRequestLabel(criterion);
+    if (!unsupportedRequests.some(({ request }) => request === label)) {
+      unsupportedRequests.push({ request: label, reason: unsupportedCopy(label) });
     }
   }
   if (/预测.{0,20}(收益|回报|涨幅|股价|价格)|未来.{0,20}(收益|回报|涨幅|股价|价格)|收益率|回报率|稳赚|目标价/.test(query) && !unsupportedRequests.some(({ request }) => /收益预测|回报预测|股价预测/.test(request))) {

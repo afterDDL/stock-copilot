@@ -40,7 +40,7 @@ function startingStrategy(caseItem: IntentEvalCase): Strategy {
   if (caseItem.context.strategy === 'existing_profit') {
     conditions.push({ field: 'net_profit_parent_yoy_pct', operator: 'gt', value: 0, unit: '%', statisticDate: '2026-06-30', sourceExpression: '业绩增长', aiInferred: false, editable: true });
   }
-  return { id: 'intent-eval', version: 1, name: '评测银行策略', industry: 'bank', conditions, sort: { field: 'net_profit_parent_yoy_pct', direction: 'desc' } };
+  return { id: 'intent-eval', version: 1, name: '评测银行策略', market: 'cn_a', conditions, sort: { field: 'net_profit_parent_yoy_pct', direction: 'desc' } };
 }
 function actionOf(result: ReturnType<typeof resolveIntent>): IntentEvalCase['expected']['action'] {
   if (result.mappings.some((item) => item.action === 'restore')) return 'restore';

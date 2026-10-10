@@ -16,9 +16,6 @@ function metricValue(stock: StockRecord, condition: Condition): MetricValue {
 
 function evaluate(actual: number | string, condition: Condition): 'passed' | 'failed' {
   if (condition.operator === 'eq') {
-    if (condition.field === 'industry' && condition.value === '银行' && typeof actual === 'string') {
-      return actual === '银行' || actual.startsWith('银行-') ? 'passed' : 'failed';
-    }
     return actual === condition.value ? 'passed' : 'failed';
   }
   if (typeof actual !== 'number' || typeof condition.value !== 'number') return 'failed';

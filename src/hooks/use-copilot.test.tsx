@@ -6,7 +6,7 @@ import { useCopilot } from './use-copilot';
 import type { DataSnapshot, Strategy } from '../lib/domain/types';
 
 const strategy: Strategy = {
-  id: 'banks', version: 1, name: '银行股筛选', industry: 'bank',
+  id: 'banks', version: 1, name: '银行股筛选', market: 'cn_a',
   conditions: [
     { field: 'industry', operator: 'eq', value: '银行', unit: '行业', statisticDate: null, sourceExpression: '银行股', aiInferred: false, editable: false },
     { field: 'market_cap_cny', operator: 'gte', value: 100_000_000_000, unit: '元', statisticDate: '2026-10-09', sourceExpression: '总市值至少1000亿元', aiInferred: true, editable: true },

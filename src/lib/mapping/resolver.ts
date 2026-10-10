@@ -36,6 +36,26 @@ function amountValues(query: string): Amount[] {
 function dateFor(field: Indicator): string | null {
   return field === 'industry' ? null : field === 'market_cap_cny' ? '2026-10-09' : '2026-06-30';
 }
+function normalizeIndustryExpression(expression: string): string {
+  return expression.trim().replace(/(?:行业|板块|股)$/u, '').trim();
+}
+function requestedIndustry(query: string): string | null {
+  if (/取消行业(?:限制|筛选)|不限制行业|不看行业|全\s*A股|全市场|沪深北\s*A股/i.test(query)) return null;
+  const direct = query.match(/(?:改成|换成|限定为|只看)([^，。；、]+)/u)?.[1];
+  if (direct) return normalizeIndustryExpression(direct);
+  for (const match of query.matchAll(/([\p{Script=Han}\p{L}\p{N}·]+?)(?:行业|板块|股)/gu)) {
+    const candidate = normalizeIndustryExpression(match[0] ?? '');
+    if (candidate && !/^(?:沪深北)?A$/i.test(candidate)) return candidate;
+  }
+  const explicit = query.match(/(?:筛选|寻找|找)([^，。；、]+)$/u)?.[1];
+  if (explicit && !/(?:总市值|市值|利润|业绩|收益|股价|涨幅|回报)/.test(explicit)) {
+    return normalizeIndustryExpression(explicit);
+  }
+  return null;
+}
+function unsupportedCopy(request: string): string {
+  return `暂不支持“${request}”指标查询。`;
+}
 function condition(field: Exclude<Indicator, 'industry'>, operator: ConditionOperator, value: number, sourceExpression: string, inferred = false): Condition {
   return {
     field, operator, value,
@@ -101,7 +121,7 @@ function extractProfitCondition(query: string): Condition | null {
 }
 function mappingForCondition(item: Condition): ConditionMapping {
   const field = item.field;
-  const concept = field === 'industry' ? 'bank_scope' : field === 'market_cap_cny' ? 'company_size' : 'profit_growth';
+  const concept = field === 'industry' ? 'industry_scope' : field === 'market_cap_cny' ? 'company_size' : 'profit_growth';
   const metric = metricDefinition(field);
   const conceptInfo = conceptDefinition(concept);
   return {
@@ -135,11 +155,18 @@ export function resolveIntent(query: string, candidateStrategy: Strategy, option
   };
   const removeField = (field: Indicator) => { strategy.conditions = strategy.conditions.filter((entry) => entry.field !== field); };
 
-  if (!strategy.conditions.some((item) => item.field === 'industry' && item.value === '银行')) {
-    strategy.conditions.unshift({
-      field: 'industry', operator: 'eq', value: '银行', unit: '行业', statisticDate: null,
-      sourceExpression: '银行股基础范围', aiInferred: false, editable: false,
-    });
+  if (/取消行业(?:限制|筛选)|不限制行业|不看行业|全\s*A股|全市场|沪深北\s*A股/i.test(normalized)) {
+    removeField('industry');
+  } else {
+    const industry = requestedIndustry(normalized);
+    if (industry) {
+      const item: Condition = {
+        field: 'industry', operator: 'eq', value: industry, unit: '行业', statisticDate: null,
+        sourceExpression: original, aiInferred: false, editable: true,
+      };
+      updateCondition('industry', [item]);
+      mappings.push({ originalExpression: original, concept: 'industry_scope', field: 'industry', state: 'confirmed', action: current ? 'patch' : 'condition', explanation: '按所属行业名称精确匹配。', unit: '行业', statisticDate: null });
+    }
   }
 
   if (/还是上次的策略|还是刚才那个|恢复上一策略|恢复上次策略/.test(normalized)) {
@@ -180,10 +207,10 @@ export function resolveIntent(query: string, candidateStrategy: Strategy, option
       const item = condition('market_cap_cny', preset.operator, preset.value, original, true);
       updateCondition('market_cap_cny', [item]);
       const presetText = (preset.value / 100_000_000).toLocaleString('zh-CN') + '亿元';
-      const note = '将“盘子大”按总市值≥' + presetText + '解释；此阈值是银行场景的可编辑产品预设。';
+      const note = '将“盘子大”按总市值≥' + presetText + '解释；此阈值是可编辑产品预设。';
       assumptions.push(note);
       const conceptInfo = conceptDefinition('company_size');
-      mappings.push({ originalExpression: original, concept: 'company_size', field: 'market_cap_cny', state: 'assumed', action: 'condition', explanation: (conceptInfo?.meaning ?? '') + '；银行场景产品预设，不是行业标准。', unit: '元', statisticDate: item.statisticDate, defaultSource: preset.source + '：' + presetText });
+      mappings.push({ originalExpression: original, concept: 'company_size', field: 'market_cap_cny', state: 'assumed', action: 'condition', explanation: (conceptInfo?.meaning ?? '') + '；产品预设，不是行业标准。', unit: '元', statisticDate: item.statisticDate, defaultSource: preset.source + '：' + presetText });
     } else if (vagueSize) {
       if (!current) removeField('market_cap_cny');
       const message = '“不要小盘股”没有给出规模阈值。请指定总市值下限，或确认使用1000亿元产品预设。';
@@ -236,8 +263,9 @@ export function resolveIntent(query: string, candidateStrategy: Strategy, option
   for (const entry of unsupportedPatterns) {
     if (!entry.pattern.test(normalized)) continue;
     const existing = unsupportedRequests.some((item) => item.request === entry.request);
-    if (!existing) unsupportedRequests.push({ request: entry.request, reason: entry.reason });
-    mappings.push({ originalExpression: original, concept: entry.concept, state: entry.state ?? 'unsupported', action: 'unsupported', explanation: entry.reason });
+    const reason = unsupportedCopy(entry.request);
+    if (!existing) unsupportedRequests.push({ request: entry.request, reason });
+    mappings.push({ originalExpression: original, concept: entry.concept, state: entry.state ?? 'unsupported', action: 'unsupported', explanation: reason });
   }
   if (/业绩好一点|盈利能力好|赚钱能力强/.test(normalized)) {
     const message = '“业绩好”可能指盈利能力、盈利增长或盈利质量。请明确想比较的含义；当前只有归母净利润同比已验证。';

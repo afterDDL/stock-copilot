@@ -30,7 +30,7 @@ export interface Strategy {
   id: string;
   version: number;
   name: string;
-  industry: 'bank';
+  market: 'cn_a';
   conditions: Condition[];
   sort: {
     field: 'market_cap_cny' | 'net_profit_parent_yoy_pct';

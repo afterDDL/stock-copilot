@@ -8,7 +8,7 @@ const condition = (operator: Condition['operator'], value: number): Condition =>
 });
 
 const strategy = (conditions: Condition[]): Strategy => ({
-  id: 'strategy-1', version: 1, name: '稳健银行股', industry: 'bank', conditions,
+  id: 'strategy-1', version: 1, name: '稳健银行股', market: 'cn_a', conditions,
   sort: { field: 'net_profit_parent_yoy_pct', direction: 'desc' },
 });
 

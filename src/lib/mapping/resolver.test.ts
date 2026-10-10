@@ -5,7 +5,7 @@ import { evaluateIntentCorpus, intentEvalCorpus } from './eval';
 import type { Strategy } from '../domain/types';
 
 const strategy: Strategy = {
-  id: 'banks', version: 2, name: '银行股筛选', industry: 'bank',
+  id: 'banks', version: 2, name: '银行股筛选', market: 'cn_a',
   conditions: [
     { field: 'industry', operator: 'eq', value: '银行', unit: '行业', statisticDate: null, sourceExpression: '银行股', aiInferred: false, editable: false },
     { field: 'market_cap_cny', operator: 'gte', value: 100_000_000_000, unit: '元', statisticDate: '2026-10-09', sourceExpression: '盘子大一点', aiInferred: true, editable: true },
@@ -15,6 +15,28 @@ const strategy: Strategy = {
 };
 
 describe('financial mapping resolver', () => {
+  it('replaces a saved bank industry with an arbitrary exact industry after stripping a suffix', () => {
+    const resolved = resolveIntent('改成新能源板块', strategy, { currentStrategy: strategy });
+
+    expect(resolved.strategy.market).toBe('cn_a');
+    expect(resolved.strategy.conditions.filter((item) => item.field === 'industry').map((item) => item.value)).toEqual(['新能源']);
+    expect(resolved.unsupportedRequests).toEqual([]);
+    expect(resolved.canExecute).toBe(true);
+  });
+
+  it('removes industry filtering when the request returns to all A shares', () => {
+    const resolved = resolveIntent('取消行业限制，面向全 A 股', strategy, { currentStrategy: strategy });
+
+    expect(resolved.strategy.conditions.some((item) => item.field === 'industry')).toBe(false);
+    expect(resolved.strategy.market).toBe('cn_a');
+  });
+
+  it('does not normalize industry words beyond the 行业、板块、股 suffixes', () => {
+    const resolved = resolveIntent('筛选非银行机构', strategy, { currentStrategy: strategy });
+
+    expect(resolved.strategy.conditions.find((item) => item.field === 'industry')?.value).toBe('非银行机构');
+  });
+
   it('allows execution only for the three verified and executable registry fields', () => {
     expect(executableMetrics().map((metric) => metric.id).sort()).toEqual([
       'industry', 'market_cap_cny', 'net_profit_parent_yoy_pct',

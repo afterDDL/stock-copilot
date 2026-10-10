@@ -4,7 +4,7 @@ import { createStrategyStorage } from './strategies';
 import type { Strategy } from '../domain/types';
 
 const strategy: Strategy = {
-  id: 'active', version: 3, name: '银行股', industry: 'bank',
+  id: 'active', version: 3, name: '银行股', market: 'cn_a',
   conditions: [{ field: 'industry', operator: 'eq', value: '银行', unit: '行业', statisticDate: null, sourceExpression: '基础范围', aiInferred: false, editable: false }],
   sort: { field: 'net_profit_parent_yoy_pct', direction: 'desc' },
 };
@@ -46,6 +46,27 @@ describe('saved strategy storage', () => {
     envelope.schemaVersion = 2;
     window.localStorage.setItem('stock-copilot:saved-strategies:v1', JSON.stringify(envelope));
     expect(createStrategyStorage(window.localStorage).list()).toEqual([]);
+  });
+
+  it('migrates a legacy saved bank strategy and preserves its bank condition', () => {
+    const legacy = {
+      id: 'legacy-bank', version: 2, name: '历史银行策略', industry: 'bank',
+      conditions: [
+        { field: 'industry', operator: 'eq', value: '银行', unit: '行业', statisticDate: null, sourceExpression: '银行股基础范围', aiInferred: false, editable: false },
+        { field: 'market_cap_cny', operator: 'gte', value: 100000000000, unit: '元', statisticDate: '2026-10-09', sourceExpression: '盘子大', aiInferred: true, editable: true },
+      ],
+      sort: { field: 'net_profit_parent_yoy_pct', direction: 'desc' },
+    };
+    window.localStorage.setItem('stock-copilot:saved-strategies:v1', JSON.stringify({
+      schemaVersion: 1,
+      entries: [{ id: 'legacy-entry', name: '历史银行策略', strategy: legacy, createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-02T00:00:00.000Z' }],
+    }));
+
+    const migrated = createStrategyStorage(window.localStorage).load('legacy-entry');
+
+    expect(migrated?.market).toBe('cn_a');
+    expect(migrated?.conditions.find((condition) => condition.field === 'industry')?.value).toBe('银行');
+    expect(migrated && 'industry' in migrated).toBe(false);
   });
 
   it('reports malformed data and unavailable localStorage as non-blocking warnings', () => {

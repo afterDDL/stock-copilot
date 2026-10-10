@@ -36,18 +36,13 @@ export const strategySchema = z.object({
   id: z.string().min(1),
   version: z.number().int().positive(),
   name: z.string().min(1),
-  industry: z.literal('bank'),
+  market: z.literal('cn_a'),
   conditions: z.array(conditionSchema).min(1),
   sort: z.object({
     field: z.enum(['market_cap_cny', 'net_profit_parent_yoy_pct']),
     direction: z.enum(['asc', 'desc']),
   }).strict(),
-}).strict().superRefine((strategy, context) => {
-  if (!strategy.conditions.some((condition) =>
-    condition.field === 'industry' && condition.operator === 'eq' && condition.value === '银行')) {
-    context.addIssue({ code: 'custom', path: ['conditions'], message: 'Bank strategies require the bank industry condition.' });
-  }
-});
+}).strict();
 
 const metricValueSchema = z.object({
   value: z.union([z.number().finite(), z.string().min(1)]).nullable(),

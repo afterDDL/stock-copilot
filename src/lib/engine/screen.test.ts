@@ -30,7 +30,7 @@ const snapshot = (stocks: StockRecord[]): DataSnapshot => ({
 });
 
 const strategy: Strategy = {
-  id: 'strategy-1', version: 1, name: '稳健银行股', industry: 'bank',
+  id: 'strategy-1', version: 1, name: '稳健银行股', market: 'cn_a',
   conditions: [
     { field: 'industry', operator: 'eq', value: '银行', unit: '行业', statisticDate: null,
       sourceExpression: '同花顺行业', aiInferred: false, editable: false },
@@ -48,10 +48,10 @@ describe('screenUniverse', () => {
     expect(result.excluded).toHaveLength(0);
   });
 
-  it('matches bank-only strategies to iFinD bank subcategory paths without substring matching', () => {
+  it('matches industry conditions exactly without prefix or substring matching', () => {
     const bankSubcategory = stock('600001', 150_000_000_000, 10);
-    bankSubcategory.industry = '银行-银行-城商行';
-    bankSubcategory.metrics.industry = metric('银行-银行-城商行', '行业', null);
+    bankSubcategory.industry = '银行';
+    bankSubcategory.metrics.industry = metric('银行', '行业', null);
     const unrelatedIndustry = stock('600002', 150_000_000_000, 10);
     unrelatedIndustry.industry = '非银行机构-银行服务';
     unrelatedIndustry.metrics.industry = metric('非银行机构-银行服务', '行业', null);
@@ -61,6 +61,36 @@ describe('screenUniverse', () => {
     expect(result.included.map((item) => item.stock.code)).toEqual(['600001']);
     expect(result.excluded.map((item) => item.stock.code)).toEqual(['600002']);
     expect(result.excluded[0]?.evidence[0]?.status).toBe('failed');
+  });
+
+  it('does not filter the all-market universe when the strategy has no industry condition', () => {
+    const marketWide: Strategy = { ...strategy, conditions: strategy.conditions.filter((item) => item.field !== 'industry') };
+    const records = [stock('000010', 150_000_000_000, 10), stock('000011', 180_000_000_000, 20)];
+    records[0]!.industry = '银行-银行-城商行';
+    records[0]!.metrics.industry = metric('银行-银行-城商行', '行业', null);
+    records[1]!.industry = '人工智能';
+    records[1]!.metrics.industry = metric('人工智能', '行业', null);
+
+    const result = screenUniverse(snapshot(records), marketWide);
+
+    expect(result.included.map((item) => item.stock.code)).toEqual(['000011', '000010']);
+  });
+
+  it('matches arbitrary industry labels exactly', () => {
+    const custom: Strategy = { ...strategy, conditions: strategy.conditions.map((item) => item.field === 'industry'
+      ? { ...item, value: '人工智能' }
+      : item) };
+    const exact = stock('000012', 150_000_000_000, 10);
+    exact.industry = '人工智能';
+    exact.metrics.industry = metric('人工智能', '行业', null);
+    const longer = stock('000013', 150_000_000_000, 10);
+    longer.industry = '人工智能服务';
+    longer.metrics.industry = metric('人工智能服务', '行业', null);
+
+    const result = screenUniverse(snapshot([exact, longer]), custom);
+
+    expect(result.included.map((item) => item.stock.code)).toEqual(['000012']);
+    expect(result.excluded.map((item) => item.stock.code)).toEqual(['000013']);
   });
 
   it('classifies a statistic-date mismatch as unknown unless another condition definitively fails', () => {

@@ -6,7 +6,7 @@ const current: Strategy = {
   id: 'strategy-1',
   version: 3,
   name: '银行股筛选',
-  industry: 'bank',
+  market: 'cn_a',
   conditions: [
     { field: 'industry', operator: 'eq', value: '银行', unit: '行业', statisticDate: null, sourceExpression: '银行股', aiInferred: false, editable: true },
     { field: 'market_cap_cny', operator: 'gte', value: 100000000000, unit: '元', statisticDate: '2026-10-09', sourceExpression: '盘子大', aiInferred: true, editable: true },
@@ -24,6 +24,41 @@ const emptyDelta = {
 };
 
 describe('parseIntentOutput', () => {
+  it('creates a market-wide strategy without injecting a bank condition', () => {
+    const result = parseIntentOutput('全市场总市值至少100亿元', {
+      ...emptyDelta,
+      condition_changes: [{ field: 'market_cap_cny', operator: 'gte', value: 10000000000, unit: '元', action: 'upsert', source_expression: '总市值至少100亿元', ai_inferred: false, editable: true }],
+    }, null);
+
+    expect(result.strategy.market).toBe('cn_a');
+    expect(result.strategy.conditions.map((item) => item.field)).toEqual(['market_cap_cny']);
+    expect(result.unsupportedRequests).toEqual([]);
+    expect(result.canExecute).toBe(true);
+  });
+
+  it('accepts an arbitrary industry condition and strips only its recognized suffix', () => {
+    const result = parseIntentOutput('筛选人工智能行业股票', {
+      ...emptyDelta,
+      condition_changes: [{ field: 'industry', operator: 'eq', value: '人工智能', unit: '行业', action: 'upsert', source_expression: '人工智能行业', ai_inferred: false, editable: true }],
+    }, null);
+
+    expect(result.strategy.conditions).toEqual([expect.objectContaining({ field: 'industry', value: '人工智能' })]);
+    expect(result.strategy.market).toBe('cn_a');
+    expect(result.unsupportedRequests).toEqual([]);
+    expect(result.canExecute).toBe(true);
+  });
+
+  it('removes an industry condition when the model explicitly removes it', () => {
+    const result = parseIntentOutput('取消行业限制', {
+      ...emptyDelta,
+      condition_changes: [{ field: 'industry', operator: 'eq', value: '银行', unit: '行业', action: 'remove', source_expression: '取消行业限制', ai_inferred: false, editable: true }],
+    }, current);
+
+    expect(result.strategy.conditions.some((item) => item.field === 'industry')).toBe(false);
+    expect(result.strategy.conditions.some((item) => item.field === 'market_cap_cny')).toBe(true);
+    expect(result.canExecute).toBe(true);
+  });
+
   it('applies the fuzzy defaults for 盘子大 and 业绩增长', () => {
     const result = parseIntentOutput('找盘子大且业绩增长的银行股', emptyDelta, null);
     expect(result.strategy.conditions.find((item) => item.field === 'market_cap_cny')).toMatchObject({
@@ -171,14 +206,22 @@ describe('parseIntentOutput', () => {
     expect(result.canExecute).toBe(false);
   });
 
-  it('rejects a non-bank industry update and keeps the bank scope', () => {
+  it('keeps unsupported user-facing copy concise and free of internal field names', () => {
     const result = parseIntentOutput('筛选互联网行业股票', {
       ...emptyDelta,
-      condition_changes: [{ field: 'industry', operator: 'eq', value: '互联网', unit: '行业', action: 'upsert', source_expression: '互联网行业', ai_inferred: false, editable: true }],
+      unsupported_requests: [{ request: '换手率', reason: '当前没有已验证的对应指标。' }],
     }, null);
-    expect(result.strategy.conditions.filter((item) => item.field === 'industry').map((item) => item.value)).toEqual(['银行']);
-    expect(result.unsupportedRequests.some(({ request }) => request.includes('互联网'))).toBe(true);
-    expect(result.canExecute).toBe(false);
+    expect(result.unsupportedRequests).toEqual([{ request: '换手率', reason: '暂不支持“换手率”指标查询。' }]);
+    expect(JSON.stringify(result.unsupportedRequests)).not.toMatch(/market_cap_cny|net_profit_parent_yoy_pct|Schema/i);
+  });
+
+  it('replaces internal field identifiers if the model returns one as an unsupported request', () => {
+    const result = parseIntentOutput('沪深北股票', {
+      ...emptyDelta,
+      unsupported_requests: [{ request: 'net_profit_parent_yoy_pct', reason: 'internal name' }],
+    }, null);
+
+    expect(result.unsupportedRequests).toEqual([{ request: '归母净利润同比增长率', reason: '暂不支持“归母净利润同比增长率”指标查询。' }]);
   });
 
   it('blocks deterministic return forecasts even if the model omits the limitation', () => {
