@@ -129,6 +129,10 @@ function unsupportedCopy(request: string): string {
   return `暂不支持“${request}”指标查询。`;
 }
 
+function isGenericModifier(request: string): boolean {
+  return /^(?:高|低|好|差|大|小|快|慢|强|弱)$/.test(request.trim());
+}
+
 function userRequestLabel(request: string): string {
   return request
     .replaceAll('industry', INDICATOR_META.industry.label)
@@ -159,7 +163,7 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
   const conditions = defaultConditions(query, currentStrategy);
   const unsupportedRequests = delta.unsupported_requests.flatMap(({ request }) => {
     const label = userRequestLabel(request).trim();
-    if (/^(?:高|低|好|差|大|小|快|慢|强|弱)$/.test(label)) return [];
+    if (isGenericModifier(label)) return [];
     return [{ request: label, reason: unsupportedCopy(label) }];
   });
   for (const change of delta.condition_changes) {
@@ -232,6 +236,7 @@ export function parseIntentOutput(query: string, output: unknown, currentStrateg
     .map((condition) => String(condition.value));
   for (const criterion of detectUncoveredCriteria(query, recognizedIndustryValues)) {
     const label = userRequestLabel(criterion);
+    if (isGenericModifier(label)) continue;
     if (!unsupportedRequests.some(({ request }) => request === label)) {
       unsupportedRequests.push({ request: label, reason: unsupportedCopy(label) });
     }

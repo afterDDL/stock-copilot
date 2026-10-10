@@ -164,7 +164,6 @@ describe('parseIntentOutput', () => {
     ['找地域布局广泛的银行股', ['地域布局']],
     ['筛选服务体验优秀且团队稳定的银行股', ['服务体验', '团队稳定']],
     ['筛选市值大且授信质量好、治理透明、服务体验优秀的银行股', ['授信质量', '治理透明', '服务体验']],
-    ['筛选市值好且业绩增长的银行股', ['好']],
     ['筛选盘子大且业绩增长、增长潜力强的银行股', ['增长潜力']],
     ['按总市值降序排序银行股', ['排序']],
     ['按利润增速升序排序银行股', ['升序']],
@@ -230,6 +229,16 @@ describe('parseIntentOutput', () => {
     const result = parseIntentOutput('找利润增长更高的股票', {
       ...emptyDelta,
       unsupported_requests: [{ request: '高', reason: '暂不支持。' }],
+    }, null);
+
+    expect(result.unsupportedRequests).toEqual([]);
+    expect(result.canExecute).toBe(true);
+  });
+
+  it('does not recreate 高 as an uncovered metric after recognizing 市值高', () => {
+    const result = parseIntentOutput('市值高', {
+      ...emptyDelta,
+      condition_changes: [{ field: 'market_cap_cny', operator: 'gte', value: 100000000000, unit: '元', action: 'upsert', source_expression: '市值高', ai_inferred: true, editable: true }],
     }, null);
 
     expect(result.unsupportedRequests).toEqual([]);
